@@ -177,7 +177,7 @@ export interface ActionEvent {
   status: "SUCCESS" | "WARNING" | "INFO";
 }
 
-export type ViewKey = "dashboard" | "transactions" | "inventory" | "logfile" | "sites" | "nota" | "material" | "report" | "leftovers" | "material_history" | "delivery_orders";
+export type ViewKey = "dashboard" | "inbound" | "outbound" | "transfer" | "borrow" | "inventory" | "logfile" | "sites" | "nota" | "material" | "report" | "leftovers" | "material_history" | "delivery_orders";
 
 export type UserRole = "Admin" | "Manager" | "Staff Gudang";
 

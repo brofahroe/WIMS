@@ -1,10 +1,14 @@
 import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
   ClipboardList,
   Database,
+  Handshake,
   LayoutDashboard,
   MapPin,
   PackageOpen,
   ReceiptText,
+  Repeat,
   Truck
 } from "lucide-react";
 import type { ViewKey, UserRole } from "../types";
@@ -20,7 +24,13 @@ interface SidebarProps {
 export function Sidebar({ activeView, onViewChange, sourceWorkbook, isMinimized = false, role = "Admin" }: SidebarProps) {
   let navItemsUtama: Array<{ key: ViewKey; label: string; icon: React.ComponentType<{ size?: number }> }> = [
     { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { key: "transactions", label: "Input Transaksi", icon: ClipboardList },
+  ];
+
+  let navItemsTransaksi: Array<{ key: ViewKey; label: string; icon: React.ComponentType<{ size?: number }> }> = [
+    { key: "inbound", label: "Barang Masuk", icon: ArrowDownToLine },
+    { key: "outbound", label: "Barang Keluar", icon: ArrowUpFromLine },
+    { key: "transfer", label: "Transfer Gudang", icon: Repeat },
+    { key: "borrow", label: "Peminjaman", icon: Handshake },
   ];
 
   let navItemsData: Array<{ key: ViewKey; label: string; icon: React.ComponentType<{ size?: number }> }> = [
@@ -37,7 +47,7 @@ export function Sidebar({ activeView, onViewChange, sourceWorkbook, isMinimized 
   ];
 
   if (role === "Manager") {
-    navItemsUtama = navItemsUtama.filter(item => item.key !== "transactions");
+    navItemsTransaksi = [];
     navItemsData = navItemsData.filter(item => item.key !== "leftovers");
   } else if (role === "Staff Gudang") {
     navItemsData = navItemsData.filter(item => item.key !== "logfile");
@@ -71,6 +81,7 @@ export function Sidebar({ activeView, onViewChange, sourceWorkbook, isMinimized 
   return (
     <aside className={`sidebar ${isMinimized ? 'is-minimized' : ''}`}>
       {renderNavGroup("Utama", navItemsUtama)}
+      {renderNavGroup("Transaksi", navItemsTransaksi)}
       {renderNavGroup("Data", navItemsData)}
       {renderNavGroup("Referensi", navItemsRef)}
 

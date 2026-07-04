@@ -1,5 +1,5 @@
 import { AlertTriangle, Info, Play, Plus, RefreshCcw, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   DeliveryOrder,
   InventoryRow,
@@ -23,6 +23,7 @@ import {
   processTempRows,
   validateForm,
 } from "../lib/wims";
+import { ReceiptModal } from "./ReceiptModal";
 
 interface TransactionWorkspaceProps {
   master: MasterData;
@@ -40,6 +41,7 @@ interface TransactionWorkspaceProps {
     ? (result: T extends object ? T : never) => void
     : never;
   onPrintNota?: () => void;
+  transactionGroup?: "INBOUND" | "OUTBOUND" | "TRANSFER" | "BORROW";
 }
 
 function defaultForm(master: MasterData): TransactionFormState {
@@ -79,9 +81,11 @@ export function TransactionWorkspace({
   onClearTemp,
   onProcess,
   onPrintNota,
+  transactionGroup,
 }: TransactionWorkspaceProps) {
   const [form, setForm] = useState<TransactionFormState>(() => defaultForm(master));
   const [submitted, setSubmitted] = useState(false);
+  const [receiptData, setReceiptData] = useState<{ notaNo: string; rows: TransactionRecord[] } | null>(null);
   
   const material = useMemo(() => getMaterial(materials, form.materialName), [materials, form.materialName]);
   const siteOrder = useMemo(
@@ -139,7 +143,10 @@ export function TransactionWorkspace({
 
   const handleProcess = () => {
     if (tempRows.length === 0) return;
+    const currentNota = tempRows[0].notaNo;
+    const currentRows = [...tempRows];
     onProcess(processTempRows(tempRows, logRows, leftoverRows, master));
+    setReceiptData({ notaNo: currentNota || "N/A", rows: currentRows });
   };
 
   const handleResetForm = () => {
@@ -156,6 +163,24 @@ export function TransactionWorkspace({
     if (t.includes("RETURN")) return "badge-return";
     return "";
   };
+
+  const filteredTxTypes = useMemo(() => {
+    return master.transactionTypes.filter((type) => {
+      if (!transactionGroup) return true;
+      const upper = type.toUpperCase();
+      if (transactionGroup === "INBOUND") return upper.includes("INBOUND");
+      if (transactionGroup === "OUTBOUND") return upper.includes("OUTBOUND");
+      if (transactionGroup === "TRANSFER") return upper.includes("TRANSFER");
+      if (transactionGroup === "BORROW") return upper.includes("BORROW") || upper.includes("RETURN");
+      return true;
+    });
+  }, [master.transactionTypes, transactionGroup]);
+
+  useEffect(() => {
+    if (filteredTxTypes.length === 1 && form.transactionType !== filteredTxTypes[0]) {
+      setField("transactionType", filteredTxTypes[0]);
+    }
+  }, [filteredTxTypes, form.transactionType]);
 
   return (
     <div className="page active" id="page-transaksi">
@@ -177,15 +202,17 @@ export function TransactionWorkspace({
       <div className="card">
         <div className="form-section">Header Transaksi</div>
         <div className="form-grid">
-          <div className="form-group">
-            <label>Tipe Transaksi *</label>
-            <select value={form.transactionType} onChange={(e) => setField("transactionType", e.target.value)}>
-              <option value="">-- Pilih Tipe --</option>
-              {master.transactionTypes.map((type) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-          </div>
+          {filteredTxTypes.length > 1 && (
+            <div className="form-group">
+              <label>Tipe Transaksi *</label>
+              <select value={form.transactionType} onChange={(e) => setField("transactionType", e.target.value)} disabled={tempRows.length > 0}>
+                <option value="">-- Pilih Tipe --</option>
+                {filteredTxTypes.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="form-group">
             <label>Nomor Nota (Auto-generate)</label>
             <input type="text" value={form.notaNo} readOnly placeholder="Pilih tipe transaksi dahulu" />
@@ -193,7 +220,7 @@ export function TransactionWorkspace({
           </div>
           <div className="form-group">
             <label>WH GCI</label>
-            <select value={form.whGci} onChange={(e) => setField("whGci", e.target.value)}>
+            <select value={form.whGci} onChange={(e) => setField("whGci", e.target.value)} disabled={tempRows.length > 0}>
               <option value="">-- Pilih WH --</option>
               {master.warehouses.filter((wh) => wh.whGci).map((wh) => (
                 <option key={wh.whGci ?? ""} value={wh.whGci ?? ""}>{wh.whGci}</option>
@@ -202,11 +229,11 @@ export function TransactionWorkspace({
           </div>
           <div className="form-group">
             <label>Tanggal *</label>
-            <input type="date" value={form.date} onChange={(e) => setField("date", e.target.value)} />
+            <input type="date" value={form.date} onChange={(e) => setField("date", e.target.value)} disabled={tempRows.length > 0} />
           </div>
           <div className="form-group">
             <label>Material Source / Destination *</label>
-            <select value={form.sourceDestination} onChange={(e) => setField("sourceDestination", e.target.value)}>
+            <select value={form.sourceDestination} onChange={(e) => setField("sourceDestination", e.target.value)} disabled={tempRows.length > 0}>
               <option value="">-- Pilih --</option>
               {master.sources.map((source) => (
                 <option key={source} value={source}>{source}</option>
@@ -284,6 +311,7 @@ export function TransactionWorkspace({
               value={form.siteName}
               onChange={(e) => setField("siteName", e.target.value)}
               placeholder="Cari site"
+              disabled={tempRows.length > 0}
             />
             <datalist id="wims-sites">
               {siteOptions.map((site) => (
@@ -315,19 +343,19 @@ export function TransactionWorkspace({
         <div className="form-grid">
           <div className="form-group">
             <label>PIC Delivery</label>
-            <input type="text" value={form.picDelivery} onChange={(e) => setField("picDelivery", e.target.value)} placeholder="Nama PIC pengiriman" />
+            <input type="text" value={form.picDelivery} onChange={(e) => setField("picDelivery", e.target.value)} placeholder="Nama PIC pengiriman" disabled={tempRows.length > 0} />
           </div>
           <div className="form-group">
             <label>Vendor / Supplier</label>
-            <input type="text" value={form.vendorSupplier} onChange={(e) => setField("vendorSupplier", e.target.value)} placeholder="Nama vendor" />
+            <input type="text" value={form.vendorSupplier} onChange={(e) => setField("vendorSupplier", e.target.value)} placeholder="Nama vendor" disabled={tempRows.length > 0} />
           </div>
           <div className="form-group">
             <label>No. ID Card (KTP)</label>
-            <input type="text" value={form.idCard} onChange={(e) => setField("idCard", e.target.value)} placeholder="16 digit KTP" />
+            <input type="text" value={form.idCard} onChange={(e) => setField("idCard", e.target.value)} placeholder="16 digit KTP" disabled={tempRows.length > 0} />
           </div>
           <div className="form-group">
             <label>Nomor Polisi Kendaraan</label>
-            <input type="text" value={form.carPlate} onChange={(e) => setField("carPlate", e.target.value)} placeholder="cth: B 1234 XY" />
+            <input type="text" value={form.carPlate} onChange={(e) => setField("carPlate", e.target.value)} placeholder="cth: B 1234 XY" disabled={tempRows.length > 0} />
           </div>
         </div>
         <div className="form-group" style={{ marginTop: 12 }}>
@@ -413,6 +441,14 @@ export function TransactionWorkspace({
           )}
         </div>
       </div>
+      
+      {receiptData && (
+        <ReceiptModal
+          notaNo={receiptData.notaNo}
+          rows={receiptData.rows}
+          onClose={() => setReceiptData(null)}
+        />
+      )}
     </div>
   );
 }

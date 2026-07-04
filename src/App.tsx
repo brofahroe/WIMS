@@ -29,7 +29,10 @@ const STORAGE_KEYS = {
 
 const VIEW_TITLES: Record<ViewKey, string> = {
   dashboard: "Dashboard",
-  transactions: "Input Transaksi",
+  inbound: "Input Barang Masuk (Inbound)",
+  outbound: "Input Barang Keluar (Outbound)",
+  transfer: "Transfer Gudang",
+  borrow: "Peminjaman / Pengembalian",
   inventory: "Stok Material",
   logfile: "Logfile Transaksi",
   leftovers: "Leftovers & LO",
@@ -46,7 +49,7 @@ function App() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [activeView, setActiveView] = useState<ViewKey>("dashboard");
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
-  const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
+  const [isSidebarMinimized, setIsSidebarMinimized] = useState(() => window.innerWidth <= 860);
   
   const [master, setMaster] = useState(seedData.master);
   const [materials, setMaterials] = useState(seedData.materials);
@@ -160,8 +163,19 @@ function App() {
     return true;
   };
 
+  const getTransactionGroup = (view: ViewKey) => {
+    switch (view) {
+      case "inbound": return "INBOUND";
+      case "outbound": return "OUTBOUND";
+      case "transfer": return "TRANSFER";
+      case "borrow": return "BORROW";
+      default: return undefined;
+    }
+  };
+
   const transactionWorkspace = (
     <TransactionWorkspace
+      transactionGroup={getTransactionGroup(activeView)}
       master={master}
       materials={materials}
       deliveryOrders={deliveryOrders}
@@ -231,7 +245,7 @@ function App() {
             {new Date().toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
           </span>
           {currentUser.role !== "Manager" && (
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => setActiveView("transactions")}>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setActiveView("outbound")}>
               + Transaksi Baru
             </button>
           )}
@@ -271,7 +285,7 @@ function App() {
             {activeView === "dashboard" ? (
               <Dashboard inventory={inventory} logRows={logRows} leftoverRows={leftoverRows} tempRows={tempRows} events={events} onMaterialClick={handleMaterialClick} />
             ) : null}
-            {activeView === "transactions" ? transactionWorkspace : null}
+            {["inbound", "outbound", "transfer", "borrow"].includes(activeView) ? transactionWorkspace : null}
             {activeView === "inventory" ? (
               <InventorySummary
                 inventory={inventory}
