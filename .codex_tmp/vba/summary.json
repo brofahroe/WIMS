@@ -1,0 +1,122 @@
+[
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/ThisWorkbook",
+    "vba_filename": "ThisWorkbook.cls",
+    "output": ".codex_tmp\\vba\\ThisWorkbook.cls",
+    "chars": 305,
+    "lines": 8
+  },
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/Sheet6",
+    "vba_filename": "Sheet6.cls",
+    "output": ".codex_tmp\\vba\\Sheet6.cls",
+    "chars": 299,
+    "lines": 8
+  },
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/Sheet1",
+    "vba_filename": "Sheet1.cls",
+    "output": ".codex_tmp\\vba\\Sheet1.cls",
+    "chars": 299,
+    "lines": 8
+  },
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/Sheet2",
+    "vba_filename": "Sheet2.cls",
+    "output": ".codex_tmp\\vba\\Sheet2.cls",
+    "chars": 299,
+    "lines": 8
+  },
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/Sheet11",
+    "vba_filename": "Sheet11.cls",
+    "output": ".codex_tmp\\vba\\Sheet11.cls",
+    "chars": 300,
+    "lines": 8
+  },
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/Sheet4",
+    "vba_filename": "Sheet4.cls",
+    "output": ".codex_tmp\\vba\\Sheet4.cls",
+    "chars": 299,
+    "lines": 8
+  },
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/Sheet5",
+    "vba_filename": "Sheet5.cls",
+    "output": ".codex_tmp\\vba\\Sheet5.cls",
+    "chars": 299,
+    "lines": 8
+  },
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/Module1",
+    "vba_filename": "Module1.bas",
+    "output": ".codex_tmp\\vba\\Module1.bas",
+    "chars": 14285,
+    "lines": 378
+  },
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/Sheet7",
+    "vba_filename": "Sheet7.cls",
+    "output": ".codex_tmp\\vba\\Sheet7.cls",
+    "chars": 299,
+    "lines": 8
+  },
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/Sheet8",
+    "vba_filename": "Sheet8.cls",
+    "output": ".codex_tmp\\vba\\Sheet8.cls",
+    "chars": 299,
+    "lines": 8
+  },
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/Sheet9",
+    "vba_filename": "Sheet9.cls",
+    "output": ".codex_tmp\\vba\\Sheet9.cls",
+    "chars": 299,
+    "lines": 8
+  },
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/Sheet10",
+    "vba_filename": "Sheet10.cls",
+    "output": ".codex_tmp\\vba\\Sheet10.cls",
+    "chars": 300,
+    "lines": 8
+  },
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/Sheet3",
+    "vba_filename": "Sheet3.cls",
+    "output": ".codex_tmp\\vba\\Sheet3.cls",
+    "chars": 299,
+    "lines": 8
+  },
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/Sheet12",
+    "vba_filename": "Sheet12.cls",
+    "output": ".codex_tmp\\vba\\Sheet12.cls",
+    "chars": 300,
+    "lines": 8
+  },
+  {
+    "filename": "xl/vbaProject.bin",
+    "stream_path": "VBA/Sheet13",
+    "vba_filename": "Sheet13.cls",
+    "output": ".codex_tmp\\vba\\Sheet13.cls",
+    "chars": 300,
+    "lines": 8
+  }
+]
