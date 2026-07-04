@@ -141,6 +141,25 @@ function App() {
     setActiveView("material_history");
   };
 
+  const handleUpdateTransaction = async (id: string, updates: Partial<TransactionRecord>) => {
+    if (isSupabaseEnabled) {
+      const { error } = await supabase.from('transactions').update(updates).eq('id', id);
+      if (error) {
+        console.error("Failed to update transaction:", error);
+        alert("Gagal mengupdate transaksi di Supabase");
+        return false;
+      }
+    }
+    
+    setLogRows((current) => 
+      current.map(row => row.id === id ? { ...row, ...updates } : row)
+    );
+    setLeftoverRows((current) => 
+      current.map(row => row.id === id ? { ...row, ...updates } : row)
+    );
+    return true;
+  };
+
   const transactionWorkspace = (
     <TransactionWorkspace
       master={master}
@@ -262,7 +281,7 @@ function App() {
                 onMaterialClick={handleMaterialClick}
               />
             ) : null}
-            {activeView === "logfile" ? <LogTables logRows={logRows} leftoverRows={leftoverRows} events={events} onMaterialClick={handleMaterialClick} /> : null}
+            {activeView === "logfile" ? <LogTables logRows={logRows} leftoverRows={leftoverRows} events={events} onMaterialClick={handleMaterialClick} onUpdateTransaction={handleUpdateTransaction} /> : null}
             {activeView === "leftovers" ? <Leftovers leftoverRows={leftoverRows} onMaterialClick={handleMaterialClick} /> : null}
             {activeView === "sites" ? <SiteTracker sites={sites} onRefresh={loadData} /> : null}
             {activeView === "delivery_orders" ? <DeliveryOrders orders={deliveryOrders} master={master} logRows={logRows} onRefresh={loadData} /> : null}

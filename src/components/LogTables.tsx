@@ -1,20 +1,40 @@
-import { Download, Search } from "lucide-react";
+import { Download, Search, Edit2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { TransactionRecord } from "../types";
 import { formatNumber, normalizeText } from "../lib/wims";
 import { useSortableData } from "../hooks/useSortableData";
 import { SortableHeader } from "./SortableHeader";
+import { Modal } from "./ui/Modal";
 
 interface LogTablesProps {
   logRows: TransactionRecord[];
   leftoverRows: TransactionRecord[]; // Kept for signature, but unused in UI
   events: any[]; // Kept for signature, but unused in UI
   onMaterialClick?: (materialName: string) => void;
+  onUpdateTransaction?: (id: string, updates: Partial<TransactionRecord>) => Promise<boolean>;
 }
 
-export function LogTables({ logRows, onMaterialClick }: LogTablesProps) {
+export function LogTables({ logRows, onMaterialClick, onUpdateTransaction }: LogTablesProps) {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
+  const [editingRow, setEditingRow] = useState<TransactionRecord | null>(null);
+  const [editFormData, setEditFormData] = useState({ siteId: "", siteName: "" });
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleEditClick = (row: TransactionRecord) => {
+    setEditingRow(row);
+    setEditFormData({ siteId: row.siteId || "", siteName: row.siteName || "" });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingRow || !onUpdateTransaction) return;
+    setIsSaving(true);
+    const success = await onUpdateTransaction(editingRow.id, editFormData);
+    if (success) {
+      setEditingRow(null);
+    }
+    setIsSaving(false);
+  };
   
   const warehouses = useMemo(() => Array.from(new Set(logRows.map(r => r.whGci).filter(Boolean))), [logRows]);
   const [whFilter, setWhFilter] = useState(() => warehouses.find(w => w?.toLowerCase().includes('malang')) || "ALL");
@@ -123,6 +143,7 @@ export function LogTables({ logRows, onMaterialClick }: LogTablesProps) {
                 <SortableHeader label="PIC Del." sortKey="picDelivery" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Vendor" sortKey="vendorSupplier" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Ket." sortKey="remarks" currentSort={sortConfig} requestSort={requestSort} />
+                {onUpdateTransaction && <th>Aksi</th>}
               </tr>
             </thead>
             <tbody>
@@ -152,6 +173,13 @@ export function LogTables({ logRows, onMaterialClick }: LogTablesProps) {
                   <td>{row.picDelivery || "-"}</td>
                   <td>{row.vendorSupplier || "-"}</td>
                   <td style={{ fontSize: 11 }}>{row.remarks || "-"}</td>
+                  {onUpdateTransaction && (
+                    <td>
+                      <button className="icon-button" style={{ border: 0, background: "transparent", cursor: "pointer", color: "var(--blue)" }} onClick={() => handleEditClick(row)} title="Edit">
+                        <Edit2 size={16} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
               {filteredRows.length === 0 && (
@@ -165,6 +193,42 @@ export function LogTables({ logRows, onMaterialClick }: LogTablesProps) {
           </table>
         </div>
       </div>
+
+      <Modal isOpen={!!editingRow} onClose={() => setEditingRow(null)} title="Edit Transaksi">
+        {editingRow && (
+          <div className="form-grid" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div className="form-group">
+              <label>Nota No.</label>
+              <input type="text" value={editingRow.notaNo || "-"} disabled style={{ background: "var(--surface)" }} />
+            </div>
+            <div className="form-group">
+              <label>Site ID</label>
+              <input 
+                type="text" 
+                value={editFormData.siteId} 
+                onChange={(e) => setEditFormData({ ...editFormData, siteId: e.target.value })}
+                placeholder="Masukkan Site ID"
+              />
+            </div>
+            <div className="form-group">
+              <label>Site Name</label>
+              <input 
+                type="text" 
+                value={editFormData.siteName} 
+                onChange={(e) => setEditFormData({ ...editFormData, siteName: e.target.value })}
+                placeholder="Masukkan Site Name"
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+              <button type="button" className="btn" onClick={() => setEditingRow(null)} disabled={isSaving}>Batal</button>
+              <button type="button" className="btn btn-primary" onClick={handleSaveEdit} disabled={isSaving}>
+                {isSaving ? "Menyimpan..." : "Simpan"}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+      
       <div id="log-count" style={{ fontSize: 12, color: "var(--text3)", marginTop: 12, textAlign: "right" }}>
         Menampilkan {filteredRows.length} dari {logRows.length} transaksi
       </div>
