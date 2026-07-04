@@ -34,7 +34,7 @@ export function LogTables({ logRows, onMaterialClick }: LogTablesProps) {
   const { items: sortedRows, requestSort, sortConfig } = useSortableData(filteredRows, { key: "date", direction: "descending" });
 
   const handleExportCsv = () => {
-    const headers = ["#", "Tipe", "Nota No.", "WH", "Tanggal", "Source/Dest", "Material", "Kode", "Qty", "Unit", "Drum No.", "Site ID", "DO Number", "Kondisi", "PIC Del.", "Vendor", "Ket."];
+    const headers = ["#", "Tipe", "Nota No.", "WH", "Tanggal", "Source/Dest", "Material", "Kode", "Qty", "Unit", "Site ID", "Site Name", "DO Number", "Kondisi", "PIC Del.", "Vendor", "Ket."];
     const rows = filteredRows.map((r, idx) => [
       `${idx + 1}`,
       `"${r.transactionType || ""}"`,
@@ -46,8 +46,8 @@ export function LogTables({ logRows, onMaterialClick }: LogTablesProps) {
       `"${r.materialCode || ""}"`,
       `"${r.qty || 0}"`,
       `"${r.unit || ""}"`,
-      `"${r.drumNumber || ""}"`,
       `"${r.siteId || ""}"`,
+      `"${r.siteName || ""}"`,
       `"${r.doNumber || ""}"`,
       `"${r.condition || ""}"`,
       `"${r.picDelivery || ""}"`,
@@ -116,8 +116,8 @@ export function LogTables({ logRows, onMaterialClick }: LogTablesProps) {
                 <SortableHeader label="Kode" sortKey="materialCode" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Qty" sortKey="qty" currentSort={sortConfig} requestSort={requestSort} align="right" />
                 <SortableHeader label="Unit" sortKey="unit" currentSort={sortConfig} requestSort={requestSort} />
-                <SortableHeader label="Drum No." sortKey="drumNumber" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Site ID" sortKey="siteId" currentSort={sortConfig} requestSort={requestSort} />
+                <SortableHeader label="Site Name" sortKey="siteName" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="DO Number" sortKey="doNumber" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Kondisi" sortKey="condition" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="PIC Del." sortKey="picDelivery" currentSort={sortConfig} requestSort={requestSort} />
@@ -145,8 +145,8 @@ export function LogTables({ logRows, onMaterialClick }: LogTablesProps) {
                   <td className="mono">{row.materialCode}</td>
                   <td className="numeric"><b>{formatNumber(row.qty)}</b></td>
                   <td>{row.unit}</td>
-                  <td className="mono">{row.drumNumber || "-"}</td>
                   <td>{row.siteId || "-"}</td>
+                  <td>{row.siteName || "-"}</td>
                   <td className="mono">{row.doNumber || "-"}</td>
                   <td>{row.condition || "-"}</td>
                   <td>{row.picDelivery || "-"}</td>
