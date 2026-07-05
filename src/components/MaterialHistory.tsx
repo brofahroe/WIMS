@@ -82,6 +82,7 @@ export function MaterialHistory({ materialName, logRows, leftoverRows, onBack }:
                 <SortableHeader label="Qty" sortKey="qty" currentSort={sortConfig} requestSort={requestSort} align="right" />
                 <SortableHeader label="Unit" sortKey="unit" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Tagging" sortKey="taggingType" currentSort={sortConfig} requestSort={requestSort} />
+                <SortableHeader label="Haspel/Drum" sortKey="drumNumber" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Ket." sortKey="remarks" currentSort={sortConfig} requestSort={requestSort} />
               </tr>
             </thead>
@@ -97,6 +98,7 @@ export function MaterialHistory({ materialName, logRows, leftoverRows, onBack }:
                   <td className="numeric"><b>{formatNumber(row.qty)}</b></td>
                   <td>{row.unit}</td>
                   <td><span className="badge" style={{ background: row.taggingType === "LEFTOVERS" ? "var(--orange)" : "var(--blue)", color: "white" }}>{row.taggingType}</span></td>
+                  <td style={{ fontSize: 12, color: "var(--blue)" }}>{row.drumNumber || row.tagId || "-"}</td>
                   <td style={{ fontSize: 11 }}>{row.remarks || "-"}</td>
                 </tr>
               ))}

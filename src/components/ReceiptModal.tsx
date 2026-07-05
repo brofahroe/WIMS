@@ -12,7 +12,8 @@ export function ReceiptModal({ notaNo, rows, onClose }: ReceiptModalProps) {
   if (!rows || rows.length === 0) return null;
 
   const firstRow = rows[0];
-  const date = firstRow.date ? new Date(firstRow.date + "T00:00:00").toLocaleDateString("id-ID", {
+  const dateStr = firstRow.date ? firstRow.date.split(" ")[0].split("T")[0] : "";
+  const date = dateStr ? new Date(dateStr + "T00:00:00").toLocaleDateString("id-ID", {
     day: '2-digit', month: 'short', year: 'numeric'
   }) : "-";
   

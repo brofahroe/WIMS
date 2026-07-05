@@ -1419,3 +1419,58 @@ tr:hover td {
     background: transparent;
   }
 }
+
+/* RESPONSIVE LAYOUT FIXES FOR MOBILE DASHBOARD */
+.three-col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .app-header {
+    height: auto;
+    padding: 10px 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .header-right {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  
+  .user-info {
+    margin-right: 0 !important;
+  }
+  
+  .app-body {
+    height: calc(100vh - 94px); /* Adjust based on header height */
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .two-col, .dashboard-lower {
+    grid-template-columns: 1fr;
+  }
+  
+  .three-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .kpi-strip {
+    grid-template-columns: 1fr;
+  }
+}

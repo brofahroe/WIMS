@@ -13,12 +13,13 @@ import { ReportExport } from "./components/ReportExport";
 import { Leftovers } from "./components/Leftovers";
 import { MaterialHistory } from "./components/MaterialHistory";
 import { DeliveryOrders } from "./components/DeliveryOrders";
+import { SiteSummaryOutbound } from "./components/SiteSummaryOutbound";
 import type { ActionEvent, SeedData, TransactionRecord, ViewKey, User } from "./types";
 import { LoginPage } from "./components/LoginPage";
 import { buildRecentEvents, calculateInventory, saveStorage, useSeedOrStorage } from "./lib/wims";
 import { supabase, fetchAll, getUserRole } from "./lib/supabase";
 
-const seedData = seedDataJson as SeedData;
+const seedData = seedDataJson as unknown as SeedData;
 
 const STORAGE_KEYS = {
   logRows: "wims-web-logRows",
@@ -42,6 +43,7 @@ const VIEW_TITLES: Record<ViewKey, string> = {
   nota: "Nota Print",
   material_history: "History Material",
   delivery_orders: "Delivery Orders",
+  site_summary: "Summary Outbound Site",
 };
 
 function App() {
@@ -176,6 +178,7 @@ function App() {
   const transactionWorkspace = (
     <TransactionWorkspace
       transactionGroup={getTransactionGroup(activeView)}
+      defaultWarehouse={warehouseFilter}
       master={master}
       materials={materials}
       deliveryOrders={deliveryOrders}
@@ -298,6 +301,7 @@ function App() {
             {activeView === "logfile" ? <LogTables logRows={logRows} leftoverRows={leftoverRows} events={events} onMaterialClick={handleMaterialClick} onUpdateTransaction={handleUpdateTransaction} /> : null}
             {activeView === "leftovers" ? <Leftovers leftoverRows={leftoverRows} onMaterialClick={handleMaterialClick} /> : null}
             {activeView === "sites" ? <SiteTracker sites={sites} onRefresh={loadData} /> : null}
+            {activeView === "site_summary" ? <SiteSummaryOutbound logRows={logRows} leftoverRows={leftoverRows} /> : null}
             {activeView === "delivery_orders" ? <DeliveryOrders orders={deliveryOrders} master={master} logRows={logRows} onRefresh={loadData} /> : null}
             {activeView === "material" ? <MasterMaterial materials={materials} onMaterialClick={handleMaterialClick} onRefresh={loadData} /> : null}
             {activeView === "material_history" && selectedMaterial ? (

@@ -185,7 +185,7 @@ export function Dashboard({ inventory, logRows, leftoverRows, tempRows, events, 
           {/* Stock by Category */}
           <div className="card">
             <div className="card-header"><span className="card-title">Ringkasan Stok per Kategori</span></div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <div className="three-col">
               {renderStockList(zteStock, "badge-zte", "ZTE Material", "purple")}
               {renderStockList(emrStock, "badge-emr", "EMR Material", "green")}
               {renderStockList(accStock, "badge-acc", "Accessories", "amber")}

@@ -22,6 +22,8 @@ import {
   normalizeText,
   processTempRows,
   validateForm,
+  movementSign,
+  getAvailableReels,
 } from "../lib/wims";
 import { ReceiptModal } from "./ReceiptModal";
 
@@ -42,10 +44,11 @@ interface TransactionWorkspaceProps {
     : never;
   onPrintNota?: () => void;
   transactionGroup?: "INBOUND" | "OUTBOUND" | "TRANSFER" | "BORROW";
+  defaultWarehouse?: string;
 }
 
-function defaultForm(master: MasterData): TransactionFormState {
-  const firstWh = master.warehouses.find((item) => item.whGci && item.whGci !== "ALL")?.whGci ?? "";
+function defaultForm(master: MasterData, defaultWarehouse?: string): TransactionFormState {
+  const firstWh = (defaultWarehouse && defaultWarehouse !== "ALL" ? defaultWarehouse : master.warehouses.find((item) => item.whGci && item.whGci !== "ALL")?.whGci) ?? "";
   return {
     taggingType: "LOGFILE",
     transactionType: "",
@@ -64,6 +67,7 @@ function defaultForm(master: MasterData): TransactionFormState {
     carPlate: "",
     remarks: "",
     drumNumber: "",
+    haspelSize: "3000",
   };
 }
 
@@ -82,8 +86,9 @@ export function TransactionWorkspace({
   onProcess,
   onPrintNota,
   transactionGroup,
+  defaultWarehouse,
 }: TransactionWorkspaceProps) {
-  const [form, setForm] = useState<TransactionFormState>(() => defaultForm(master));
+  const [form, setForm] = useState<TransactionFormState>(() => defaultForm(master, defaultWarehouse));
   const [submitted, setSubmitted] = useState(false);
   const [receiptData, setReceiptData] = useState<{ notaNo: string; rows: TransactionRecord[] } | null>(null);
   
@@ -107,6 +112,11 @@ export function TransactionWorkspace({
     return groups;
   }, [materials]);
   
+  const availableReels = useMemo(() => {
+    const allRows = [...logRows, ...leftoverRows, ...tempRows];
+    return getAvailableReels(form.materialName, form.whGci, form.taggingType, allRows);
+  }, [form.materialName, form.whGci, form.taggingType, logRows, leftoverRows, tempRows]);
+
   const liveValidation = validateForm(form, materials, inventory);
 
   const setField = <K extends keyof TransactionFormState>(field: K, value: TransactionFormState[K]) => {
@@ -128,12 +138,75 @@ export function TransactionWorkspace({
     setSubmitted(true);
     if (liveValidation.errors.length > 0) return;
     const nextLine = tempRows.reduce((max, row) => Math.max(max, Number(row.lineId) || 0), 0) + 1;
-    const row = makeTempRecord(form, nextLine, master, materials, deliveryOrders, [...logRows, ...leftoverRows, ...tempRows]);
-    onAddTemp(row);
+    const allRows = [...logRows, ...leftoverRows, ...tempRows];
+    
+    const sign = movementSign(form.transactionType);
+    const isCable = material?.unit?.toUpperCase() === "METER";
+
+    if (isCable && sign > 0) {
+      const reelSize = Number(form.haspelSize) || 3000;
+      const qty = Number(form.qty) || 0;
+      const numReels = Math.ceil(qty / reelSize);
+      
+      const dateObj = form.date ? new Date(form.date) : new Date();
+      const dateStr = `${String(dateObj.getFullYear()).slice(-2)}${String(dateObj.getMonth()+1).padStart(2,"0")}${String(dateObj.getDate()).padStart(2,"0")}`;
+      const namePart = (material?.materialName || "CAB").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+      const prefix = `H-${namePart}-${dateStr}-`;
+      
+      let maxSeq = 0;
+      for (const r of allRows) {
+        if (r.drumNumber?.startsWith(prefix)) {
+           const seq = Number(r.drumNumber.slice(prefix.length));
+           if (Number.isFinite(seq)) maxSeq = Math.max(maxSeq, seq);
+        }
+      }
+      
+      let remaining = qty;
+      let currentLine = nextLine;
+      for (let i = 0; i < numReels; i++) {
+         const take = Math.min(remaining, reelSize);
+         if (take <= 0) break;
+         maxSeq++;
+         const reelId = `${prefix}${String(maxSeq).padStart(3, "0")}`;
+         
+         const row = makeTempRecord({...form, qty: String(take), drumNumber: reelId}, currentLine, master, materials, deliveryOrders, allRows);
+         onAddTemp(row);
+         currentLine++;
+         remaining -= take;
+      }
+    } else if (isCable && sign < 0) {
+       const qty = Number(form.qty) || 0;
+       let availableReelsList = getAvailableReels(form.materialName, form.whGci, form.taggingType, allRows);
+       
+       if (form.drumNumber) {
+          availableReelsList = availableReelsList.filter(r => r.drumNumber === form.drumNumber);
+       }
+       
+       let remaining = qty;
+       let currentLine = nextLine;
+       
+       for (const reel of availableReelsList) {
+          if (remaining <= 0) break;
+          const take = Math.min(remaining, reel.remaining);
+          
+          const row = makeTempRecord({...form, qty: String(take), drumNumber: reel.drumNumber}, currentLine, master, materials, deliveryOrders, allRows);
+          onAddTemp(row);
+          currentLine++;
+          remaining -= take;
+       }
+       
+       if (remaining > 0) {
+          alert(`Stok Haspel/Reel tidak cukup untuk material ini. Sisa kurang: ${formatNumber(remaining)} Meter. Input dibatalkan sebagian/seluruhnya.`);
+       }
+    } else {
+       const row = makeTempRecord(form, nextLine, master, materials, deliveryOrders, allRows);
+       onAddTemp(row);
+    }
+
     setSubmitted(false);
     setForm((current) => ({
       ...current,
-      notaNo: row.notaNo ?? current.notaNo,
+      notaNo: current.notaNo,
       qty: "",
       remarks: "",
       materialName: "",
@@ -150,7 +223,7 @@ export function TransactionWorkspace({
   };
 
   const handleResetForm = () => {
-    setForm(defaultForm(master));
+    setForm(defaultForm(master, defaultWarehouse));
     setSubmitted(false);
   };
 
@@ -176,11 +249,27 @@ export function TransactionWorkspace({
     });
   }, [master.transactionTypes, transactionGroup]);
 
+  const filteredSources = useMemo(() => {
+    if (transactionGroup === "BORROW") {
+      return master.sources.filter(s => s.toLowerCase().includes("other subcon"));
+    }
+    return master.sources;
+  }, [master.sources, transactionGroup]);
+
   useEffect(() => {
     if (filteredTxTypes.length === 1 && form.transactionType !== filteredTxTypes[0]) {
       setField("transactionType", filteredTxTypes[0]);
     }
-  }, [filteredTxTypes, form.transactionType]);
+    if (filteredSources.length === 1 && form.sourceDestination !== filteredSources[0]) {
+      setField("sourceDestination", filteredSources[0]);
+    }
+  }, [filteredTxTypes, filteredSources, form.transactionType, form.sourceDestination]);
+
+  useEffect(() => {
+    if (defaultWarehouse && defaultWarehouse !== "ALL" && form.whGci !== defaultWarehouse && tempRows.length === 0) {
+      setField("whGci", defaultWarehouse);
+    }
+  }, [defaultWarehouse]);
 
   return (
     <div className="page active" id="page-transaksi">
@@ -235,7 +324,7 @@ export function TransactionWorkspace({
             <label>Material Source / Destination *</label>
             <select value={form.sourceDestination} onChange={(e) => setField("sourceDestination", e.target.value)} disabled={tempRows.length > 0}>
               <option value="">-- Pilih --</option>
-              {master.sources.map((source) => (
+              {filteredSources.map((source) => (
                 <option key={source} value={source}>{source}</option>
               ))}
             </select>
@@ -276,8 +365,16 @@ export function TransactionWorkspace({
         <div className="form-grid-3" style={{ marginTop: 12 }}>
           <div className="form-group">
             <label>Qty *</label>
-            <input min="0" step="0.01" type="number" value={form.qty} onChange={(e) => setField("qty", e.target.value)} placeholder="0" />
+            <input type="number" value={form.qty} onChange={(e) => setField("qty", e.target.value)} placeholder="0" />
+            <div className="form-hint">Stock WH: <b>{formatNumber(inventory.find((i) => i.materialName === material?.materialName)?.stockWhCalc ?? 0)}</b> {material?.unit}</div>
           </div>
+          {material?.unit?.toUpperCase() === "METER" && movementSign(form.transactionType) > 0 && (
+            <div className="form-group">
+              <label>Haspel/Reel Size (Meter) *</label>
+              <input type="text" value={form.haspelSize || ""} onChange={(e) => setField("haspelSize", e.target.value)} placeholder="3000" />
+              <div className="form-hint">Otomatis dipecah per {form.haspelSize || 3000}m</div>
+            </div>
+          )}
           <div className="form-group">
             <label>Kondisi Material</label>
             <select value={form.condition} onChange={(e) => setField("condition", e.target.value)}>
@@ -296,48 +393,63 @@ export function TransactionWorkspace({
           </div>
           {material?.unit?.toLowerCase() === "meter" && (
             <div className="form-group">
-              <label>Drum Number (Opsional)</label>
-              <input type="text" value={form.drumNumber || ""} onChange={(e) => setField("drumNumber", e.target.value)} placeholder="Contoh: DN-12345" />
+              <label>Drum Number / Haspel</label>
+              {movementSign(form.transactionType) < 0 ? (
+                <select value={form.drumNumber || ""} onChange={(e) => setField("drumNumber", e.target.value)}>
+                  <option value="">-- Auto FIFO --</option>
+                  {availableReels.map(r => (
+                    <option key={r.drumNumber} value={r.drumNumber}>
+                      {r.drumNumber} (Sisa: {formatNumber(r.remaining)}m)
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input type="text" value={form.drumNumber || ""} onChange={(e) => setField("drumNumber", e.target.value)} placeholder="Contoh: DN-12345" disabled={movementSign(form.transactionType) > 0} title={movementSign(form.transactionType) > 0 ? "Otomatis digenerate" : ""} />
+              )}
             </div>
           )}
         </div>
 
-        <div className="form-section">Informasi Site</div>
-        <div className="form-grid-3">
-          <div className="form-group">
-            <label>Site Name</label>
-            <input
-              list="wims-sites"
-              value={form.siteName}
-              onChange={(e) => setField("siteName", e.target.value)}
-              placeholder="Cari site"
-              disabled={tempRows.length > 0}
-            />
-            <datalist id="wims-sites">
-              {siteOptions.map((site) => (
-                <option key={site} value={site} />
-              ))}
-            </datalist>
-          </div>
-          <div className="form-group">
-            <label>Site ID (Auto)</label>
-            <input type="text" value={siteOrder?.siteId || ""} readOnly placeholder="—" />
-          </div>
-          <div className="form-group">
-            <label>Milestone Site (Auto)</label>
-            <input type="text" value={sites.find(s => s.siteName === form.siteName)?.finalMilestone || ""} readOnly placeholder="—" style={{ fontSize: 11 }} />
-          </div>
-        </div>
-        <div className="form-grid" style={{ marginTop: 12 }}>
-          <div className="form-group">
-            <label>DO Number</label>
-            <input type="text" value={form.doNumber || siteOrder?.doNumber || ""} onChange={(e) => setField("doNumber" as any, e.target.value)} placeholder="DOEID..." />
-          </div>
-          <div className="form-group">
-            <label>DN Number</label>
-            <input type="text" value={form.dnNumber || siteOrder?.dnNumber || ""} onChange={(e) => setField("dnNumber" as any, e.target.value)} placeholder="DNWID..." />
-          </div>
-        </div>
+        {transactionGroup !== "TRANSFER" && (
+          <>
+            <div className="form-section">Informasi Site</div>
+            <div className="form-grid-3">
+              <div className="form-group">
+                <label>Site Name</label>
+                <input
+                  list="wims-sites"
+                  value={form.siteName}
+                  onChange={(e) => setField("siteName", e.target.value)}
+                  placeholder="Cari site"
+                  disabled={tempRows.length > 0}
+                />
+                <datalist id="wims-sites">
+                  {siteOptions.map((site) => (
+                    <option key={site} value={site} />
+                  ))}
+                </datalist>
+              </div>
+              <div className="form-group">
+                <label>Site ID (Auto)</label>
+                <input type="text" value={siteOrder?.siteId || ""} readOnly placeholder="—" />
+              </div>
+              <div className="form-group">
+                <label>Milestone Site (Auto)</label>
+                <input type="text" value={sites.find(s => s.siteName === form.siteName)?.finalMilestone || ""} readOnly placeholder="—" style={{ fontSize: 11 }} />
+              </div>
+            </div>
+            <div className="form-grid" style={{ marginTop: 12 }}>
+              <div className="form-group">
+                <label>DO Number</label>
+                <input type="text" value={form.doNumber || siteOrder?.doNumber || ""} onChange={(e) => setField("doNumber" as any, e.target.value)} placeholder="DOEID..." />
+              </div>
+              <div className="form-group">
+                <label>DN Number</label>
+                <input type="text" value={form.dnNumber || siteOrder?.dnNumber || ""} onChange={(e) => setField("dnNumber" as any, e.target.value)} placeholder="DNWID..." />
+              </div>
+            </div>
+          </>
+        )}
 
         <div className="form-section">Informasi Pengiriman (Opsional)</div>
         <div className="form-grid">
@@ -408,6 +520,7 @@ export function TransactionWorkspace({
                   <th>Transaksi</th>
                   <th>Nota No.</th>
                   <th>Material</th>
+                  <th>Drum Number / Haspel</th>
                   <th>Site Name</th>
                   <th style={{ textAlign: "right" }}>Qty</th>
                   <th>Unit</th>
@@ -426,6 +539,7 @@ export function TransactionWorkspace({
                     <td>{row.transactionType}</td>
                     <td className="mono">{row.notaNo}</td>
                     <td>{row.materialName}</td>
+                    <td style={{ fontSize: 12, color: "var(--blue)" }}>{row.drumNumber || "-"}</td>
                     <td>{row.siteName || "-"}</td>
                     <td style={{ textAlign: "right", fontWeight: 600 }}>{formatNumber(row.qty)}</td>
                     <td>{row.unit}</td>

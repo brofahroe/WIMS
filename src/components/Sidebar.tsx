@@ -37,6 +37,7 @@ export function Sidebar({ activeView, onViewChange, sourceWorkbook, isMinimized 
     { key: "logfile", label: "Logfile Transaksi", icon: Database },
     { key: "inventory", label: "Stok Material", icon: PackageOpen },
     { key: "leftovers", label: "Leftovers & LO", icon: ReceiptText },
+    { key: "site_summary", label: "Summary Outbound Site", icon: Database },
   ];
 
   let navItemsRef: Array<{ key: ViewKey; label: string; icon: React.ComponentType<{ size?: number }> }> = [

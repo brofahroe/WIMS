@@ -166,6 +166,7 @@ export interface TransactionFormState {
   doNumber?: string;
   dnNumber?: string;
   drumNumber?: string;
+  haspelSize?: string;
 }
 
 export interface ActionEvent {
@@ -177,7 +178,7 @@ export interface ActionEvent {
   status: "SUCCESS" | "WARNING" | "INFO";
 }
 
-export type ViewKey = "dashboard" | "inbound" | "outbound" | "transfer" | "borrow" | "inventory" | "logfile" | "sites" | "nota" | "material" | "report" | "leftovers" | "material_history" | "delivery_orders";
+export type ViewKey = "dashboard" | "inbound" | "outbound" | "transfer" | "borrow" | "inventory" | "logfile" | "sites" | "nota" | "material" | "report" | "leftovers" | "material_history" | "delivery_orders" | "site_summary";
 
 export type UserRole = "Admin" | "Manager" | "Staff Gudang";
 

@@ -108,6 +108,50 @@ export function movementSign(type: string | null): number {
   return 0;
 }
 
+export interface ReelBalance {
+  drumNumber: string;
+  taggingType: TaggingType;
+  remaining: number;
+  date: string;
+}
+
+export function getAvailableReels(
+  materialName: string,
+  whGci: string,
+  taggingType: TaggingType,
+  rows: TransactionRecord[]
+): ReelBalance[] {
+  const balances: Record<string, ReelBalance> = {};
+
+  for (const row of rows) {
+    if (!compareText(row.materialName, materialName) || !compareText(row.whGci, whGci) || row.taggingType !== taggingType) continue;
+    const reelId = row.drumNumber || row.tagId;
+    if (!reelId) continue;
+
+    const sign = movementSign(row.transactionType);
+    if (sign === 0) continue;
+    const qty = Number(row.qty) || 0;
+
+    if (!balances[reelId]) {
+      balances[reelId] = {
+        drumNumber: reelId,
+        taggingType: row.taggingType,
+        remaining: 0,
+        date: row.date || "",
+      };
+    }
+    balances[reelId].remaining += sign * qty;
+    
+    if (sign > 0 && (!balances[reelId].date || (row.date && row.date < balances[reelId].date))) {
+      balances[reelId].date = row.date || "";
+    }
+  }
+
+  return Object.values(balances)
+    .filter(b => b.remaining > 0)
+    .sort((a, b) => a.date.localeCompare(b.date)); // FIFO
+}
+
 export function calculateInventory(
   materials: MaterialItem[],
   logRows: TransactionRecord[],
