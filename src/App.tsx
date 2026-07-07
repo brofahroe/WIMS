@@ -238,7 +238,7 @@ function App() {
           const { error } = await supabase.from('transactions').insert(result.newRows);
           if (error) {
             console.error("Failed to insert to Supabase:", error);
-            alert("Gagal menyimpan ke Supabase. Silakan cek koneksi atau console.");
+            alert(`Gagal menyimpan ke Supabase. Error: ${error.message || JSON.stringify(error)}\nSilakan cek koneksi atau hubungi admin.`);
           }
         }
       }}
