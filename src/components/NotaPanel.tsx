@@ -130,6 +130,18 @@ export function NotaPanel({ logRows }: NotaPanelProps) {
               <span>Vendor Supplier</span>
               <strong>{head.vendorSupplier || "-"}</strong>
             </div>
+            <div>
+              <span>Bukti Transaksi</span>
+              <strong>
+                {head.proofLink ? (
+                  <a href={head.proofLink} target="_blank" rel="noreferrer" className="btn btn-sm" style={{ display: 'inline-flex', marginTop: 4, textDecoration: 'none' }}>
+                    Lihat Bukti ↗
+                  </a>
+                ) : (
+                  "-"
+                )}
+              </strong>
+            </div>
           </footer>
         </div>
       )}

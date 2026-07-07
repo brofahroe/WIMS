@@ -14,6 +14,7 @@ import { Leftovers } from "./components/Leftovers";
 import { MaterialHistory } from "./components/MaterialHistory";
 import { DeliveryOrders } from "./components/DeliveryOrders";
 import { SiteSummaryOutbound } from "./components/SiteSummaryOutbound";
+import { DrumHistory } from "./components/DrumHistory";
 import type { ActionEvent, SeedData, TransactionRecord, ViewKey, User } from "./types";
 import { LoginPage } from "./components/LoginPage";
 import { buildRecentEvents, calculateInventory, saveStorage, useSeedOrStorage } from "./lib/wims";
@@ -44,6 +45,7 @@ const VIEW_TITLES: Record<ViewKey, string> = {
   material_history: "History Material",
   delivery_orders: "Delivery Orders",
   site_summary: "Summary Outbound Site",
+  drum_history: "History Haspel",
 };
 
 function App() {
@@ -51,6 +53,7 @@ function App() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [activeView, setActiveView] = useState<ViewKey>("dashboard");
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
+  const [selectedDrumNumber, setSelectedDrumNumber] = useState<string | null>(null);
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(() => window.innerWidth <= 860);
   
   const [master, setMaster] = useState(seedData.master);
@@ -105,26 +108,56 @@ function App() {
 
   useEffect(() => {
     loadData();
+
+    if (!isSupabaseEnabled) {
+      setCurrentUser({
+        id: 'local',
+        email: 'local@wims.com',
+        role: 'Admin'
+      });
+      setIsAuthLoading(false);
+      return;
+    }
+    
+    // Fallback timeout to ensure the app loads even if Supabase is completely unresponsive
+    const fallbackTimeout = setTimeout(() => {
+      setIsAuthLoading(false);
+    }, 5000);
     
     // Auth Listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        const role = await getUserRole(session.user.id);
-        setCurrentUser({
-          id: session.user.id,
-          email: session.user.email || '',
-          role: (role as any) || 'Staff Gudang' // Default fallback
-        });
+        try {
+          // Timeout for getUserRole in case Supabase is paused/hanging
+          const rolePromise = getUserRole(session.user.id);
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
+          const role = await Promise.race([rolePromise, timeoutPromise]) as string | null;
+          
+          setCurrentUser({
+            id: session.user.id,
+            email: session.user.email || '',
+            role: (role as any) || 'Staff Gudang'
+          });
+        } catch (error) {
+          console.warn("Failed or timed out fetching user role:", error);
+          setCurrentUser({
+            id: session.user.id,
+            email: session.user.email || '',
+            role: 'Staff Gudang' // Fallback
+          });
+        }
       } else {
         setCurrentUser(null);
       }
       setIsAuthLoading(false);
+      clearTimeout(fallbackTimeout);
     });
 
     return () => {
+      clearTimeout(fallbackTimeout);
       subscription.unsubscribe();
     };
-  }, [loadData]);
+  }, [loadData, isSupabaseEnabled]);
 
   useEffect(() => { if (!isSupabaseEnabled) saveStorage(STORAGE_KEYS.logRows, logRows); }, [logRows, isSupabaseEnabled]);
   useEffect(() => { if (!isSupabaseEnabled) saveStorage(STORAGE_KEYS.leftoverRows, leftoverRows); }, [leftoverRows, isSupabaseEnabled]);
@@ -141,10 +174,15 @@ function App() {
     alert("Database berhasil di-reset!");
   };
 
-  const handleMaterialClick = (materialName: string) => {
+  const handleMaterialClick = useCallback((materialName: string) => {
     setSelectedMaterial(materialName);
     setActiveView("material_history");
-  };
+  }, []);
+
+  const handleDrumClick = useCallback((drumNumber: string) => {
+    setSelectedDrumNumber(drumNumber);
+    setActiveView("drum_history");
+  }, []);
 
   const handleUpdateTransaction = async (id: string, updates: Partial<TransactionRecord>) => {
     if (isSupabaseEnabled) {
@@ -228,7 +266,7 @@ function App() {
           >
             <Menu size={20} />
           </button>
-          <div className="logo-icon">W</div>
+          <img src="/logo.png" alt="WIMS Logo" className="logo-icon" style={{ border: 'none', background: 'transparent', objectFit: 'contain' }} />
           <div className="logo-text">
             <h1>WIMS v3</h1>
             <p>Warehouse Inventory Monitoring System</p>
@@ -298,14 +336,17 @@ function App() {
                 onMaterialClick={handleMaterialClick}
               />
             ) : null}
-            {activeView === "logfile" ? <LogTables logRows={logRows} leftoverRows={leftoverRows} events={events} onMaterialClick={handleMaterialClick} onUpdateTransaction={handleUpdateTransaction} /> : null}
+            {activeView === "logfile" ? <LogTables logRows={logRows} leftoverRows={leftoverRows} events={events} onMaterialClick={handleMaterialClick} onDrumClick={handleDrumClick} onUpdateTransaction={handleUpdateTransaction} /> : null}
             {activeView === "leftovers" ? <Leftovers leftoverRows={leftoverRows} onMaterialClick={handleMaterialClick} /> : null}
             {activeView === "sites" ? <SiteTracker sites={sites} onRefresh={loadData} /> : null}
             {activeView === "site_summary" ? <SiteSummaryOutbound logRows={logRows} leftoverRows={leftoverRows} /> : null}
+            {activeView === "drum_history" && selectedDrumNumber ? (
+              <DrumHistory drumNumber={selectedDrumNumber} logRows={logRows} leftoverRows={leftoverRows} onBack={() => setActiveView("dashboard")} />
+            ) : null}
             {activeView === "delivery_orders" ? <DeliveryOrders orders={deliveryOrders} master={master} logRows={logRows} onRefresh={loadData} /> : null}
             {activeView === "material" ? <MasterMaterial materials={materials} onMaterialClick={handleMaterialClick} onRefresh={loadData} /> : null}
             {activeView === "material_history" && selectedMaterial ? (
-              <MaterialHistory materialName={selectedMaterial} logRows={logRows} leftoverRows={leftoverRows} onBack={() => setActiveView("dashboard")} />
+              <MaterialHistory materialName={selectedMaterial} logRows={logRows} leftoverRows={leftoverRows} onDrumClick={handleDrumClick} onBack={() => setActiveView("dashboard")} />
             ) : null}
             {activeView === "report" ? (
               <ReportExport 

@@ -194,8 +194,6 @@ export function ReportExport({ logRows, inventory, sites, materials, onImport }:
                   <tr><td>BORROW OUT</td><td className="mono">BOO</td><td className="mono">BOO-WHYYMM-XXX</td><td>Pinjam keluar ke WH lain</td></tr>
                   <tr><td>TRANSFER IN</td><td className="mono">TFI</td><td className="mono">TFI-WHYYMM-XXX</td><td>Mutasi masuk permanen</td></tr>
                   <tr><td>TRANSFER OUT</td><td className="mono">TFO</td><td className="mono">TFO-WHYYMM-XXX</td><td>Mutasi keluar permanen</td></tr>
-                  <tr><td>RETURN IN</td><td className="mono">RIN</td><td className="mono">RIN-WHYYMM-XXX</td><td>Retur/sisa dari site</td></tr>
-                  <tr><td>RETURN OUT</td><td className="mono">ROO</td><td className="mono">ROO-WHYYMM-XXX</td><td>Retur/rusak ke pusat</td></tr>
                 </tbody>
               </table>
             </div>

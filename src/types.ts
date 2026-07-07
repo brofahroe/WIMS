@@ -6,9 +6,7 @@ export type TransactionType =
   | "BORROW IN"
   | "BORROW OUT"
   | "TRANSFER IN"
-  | "TRANSFER OUT"
-  | "RETURN IN"
-  | "RETURN OUT";
+  | "TRANSFER OUT";
 
 export interface WarehouseOption {
   whId: string | null;
@@ -120,6 +118,7 @@ export interface TransactionRecord {
   inOutQty?: number | string | null;
   loCriteria?: string | null;
   drumNumber?: string | null;
+  proofLink?: string | null;
 }
 
 export interface SeedData {
@@ -167,6 +166,7 @@ export interface TransactionFormState {
   dnNumber?: string;
   drumNumber?: string;
   haspelSize?: string;
+  proofLink?: string;
 }
 
 export interface ActionEvent {
@@ -178,7 +178,7 @@ export interface ActionEvent {
   status: "SUCCESS" | "WARNING" | "INFO";
 }
 
-export type ViewKey = "dashboard" | "inbound" | "outbound" | "transfer" | "borrow" | "inventory" | "logfile" | "sites" | "nota" | "material" | "report" | "leftovers" | "material_history" | "delivery_orders" | "site_summary";
+export type ViewKey = "dashboard" | "inbound" | "outbound" | "transfer" | "borrow" | "inventory" | "logfile" | "sites" | "nota" | "material" | "report" | "leftovers" | "material_history" | "delivery_orders" | "site_summary" | "drum_history";
 
 export type UserRole = "Admin" | "Manager" | "Staff Gudang";
 

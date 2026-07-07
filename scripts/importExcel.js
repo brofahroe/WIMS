@@ -51,6 +51,7 @@ function processLogfile(sheet) {
       idCard: String(row[21] || ""),
       carPlate: String(row[22] || ""),
       remarks: row[23] || null,
+      drumNumber: row[24] ? String(row[24]) : null,
       taggingType: "LOGFILE"
     };
     records.push(record);
@@ -64,7 +65,7 @@ function processLOLogfile(sheet) {
   const records = [];
 
   for (const row of rows) {
-    if (!row || row.length === 0 || !row[3]) continue; // Missing transaction type
+    if (!row || row.length === 0 || !row[3]) continue;
 
     const record = {
       id: crypto.randomUUID(),
@@ -95,8 +96,31 @@ function processLOLogfile(sheet) {
       remarks: row[24] || null,
       taggingManual: row[25] || null,
       cableLengthMarker: row[26] || null,
-      cableRoll: row[27] || null,
+      drumNumber: row[27] ? String(row[27]) : null,
+      cableRoll: row[27] ? String(row[27]) : null,
       taggingType: "LEFTOVERS"
+    };
+    records.push(record);
+  }
+  return records;
+}
+
+function processSiteDB(sheet) {
+  const data = xlsx.utils.sheet_to_json(sheet, { header: 1 });
+  const rows = data.slice(4);
+  const records = [];
+
+  for (const row of rows) {
+    if (!row || row.length === 0 || !row[3]) continue; // Missing SiteID
+
+    const record = {
+      id: crypto.randomUUID(),
+      siteId: String(row[3] || "").trim(),
+      siteName: String(row[4] || "").trim(),
+      city: String(row[2] || "").trim(),
+      region: String(row[1] || "").trim(),
+      team: String(row[7] || "").trim(),
+      finalMilestone: String(row[21] || "").trim(),
     };
     records.push(record);
   }
@@ -109,7 +133,7 @@ function processDeliveryOrders(sheet) {
   const records = [];
 
   for (const row of rows) {
-    if (!row || row.length === 0 || !row[0]) continue; // Missing SiteID
+    if (!row || row.length === 0 || !row[0]) continue;
 
     const record = {
       siteId: row[0] || null,
@@ -158,6 +182,13 @@ function main() {
     console.log(`Berhasil memproses ${deliveryOrders.length} baris Delivery Orders.`);
   }
 
+  let sites = null;
+  if (wb.Sheets["Site_DB"]) {
+    console.log("Memproses Site_DB...");
+    sites = processSiteDB(wb.Sheets["Site_DB"]);
+    console.log(`Berhasil memproses ${sites.length} baris Site DB.`);
+  }
+
   console.log("Membaca data seed saat ini...");
   if (!fs.existsSync(JSON_FILE)) {
     console.error("File JSON tidak ditemukan:", JSON_FILE);
@@ -167,11 +198,13 @@ function main() {
   const rawJson = fs.readFileSync(JSON_FILE, "utf8");
   const seedData = JSON.parse(rawJson);
 
-  // Update only the transaction logs and DO
   seedData.logRows = logRows;
   seedData.leftoverRows = leftoverRows;
   if (deliveryOrders) {
     seedData.deliveryOrders = deliveryOrders;
+  }
+  if (sites) {
+    seedData.sites = sites;
   }
   seedData.generatedAt = new Date().toISOString();
 

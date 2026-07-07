@@ -11,8 +11,8 @@ import type {
   WarehouseOption,
 } from "../types";
 
-export const POSITIVE_TYPES = new Set(["INBOUND", "BORROW IN", "TRANSFER IN", "RETURN IN"]);
-export const NEGATIVE_TYPES = new Set(["OUTBOUND", "BORROW OUT", "TRANSFER OUT", "RETURN OUT"]);
+export const POSITIVE_TYPES = new Set(["INBOUND", "BORROW IN", "TRANSFER IN"]);
+export const NEGATIVE_TYPES = new Set(["OUTBOUND", "BORROW OUT", "TRANSFER OUT"]);
 
 export const PREFIX_BY_TYPE: Record<string, string> = {
   "BORROW IN": "BOI",
@@ -21,8 +21,6 @@ export const PREFIX_BY_TYPE: Record<string, string> = {
   "TRANSFER OUT": "TFO",
   INBOUND: "INB",
   OUTBOUND: "OUB",
-  "RETURN IN": "RIN",
-  "RETURN OUT": "ROO",
 };
 
 export function normalizeText(value: unknown): string {
@@ -96,8 +94,6 @@ export function transactionBucket(type: string | null): keyof Pick<
   if (normalized === "TRANSFER OUT") return "transferOutCalc";
   if (normalized === "BORROW IN") return "borrowInCalc";
   if (normalized === "BORROW OUT") return "borrowOutCalc";
-  if (normalized === "RETURN IN") return "returnInCalc";
-  if (normalized === "RETURN OUT") return "returnOutCalc";
   return null;
 }
 
@@ -256,6 +252,7 @@ export function makeTempRecord(
     carPlate: form.carPlate,
     remarks: form.remarks,
     drumNumber: form.drumNumber || null,
+    proofLink: form.proofLink || null,
   };
 }
 

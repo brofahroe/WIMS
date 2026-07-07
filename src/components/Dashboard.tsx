@@ -203,7 +203,7 @@ export function Dashboard({ inventory, logRows, leftoverRows, tempRows, events, 
                 <div key={r.id || idx} style={{ padding: "8px 0", borderBottom: idx < recentTx.length - 1 ? "1px solid var(--border)" : "none" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span className={`badge ${TX_BADGE[r.transactionType || ""] || ""}`}>{r.transactionType}</span>
-                    <span style={{ fontSize: 11, color: "var(--text3)" }}>{r.date}</span>
+                    <span style={{ fontSize: 11, color: "var(--text3)" }}>{r.date?.split("T")[0]?.split(" ")[0]}</span>
                   </div>
                   <div style={{ fontSize: 13, marginTop: 3 }}>
                     {r.materialName} — {formatNumber(r.qty)} {r.unit}

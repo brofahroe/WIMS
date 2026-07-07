@@ -9,10 +9,11 @@ interface MaterialHistoryProps {
   materialName: string;
   logRows: TransactionRecord[];
   leftoverRows: TransactionRecord[];
+  onDrumClick?: (drumNumber: string) => void;
   onBack: () => void;
 }
 
-export function MaterialHistory({ materialName, logRows, leftoverRows, onBack }: MaterialHistoryProps) {
+export function MaterialHistory({ materialName, logRows, leftoverRows, onDrumClick, onBack }: MaterialHistoryProps) {
   // Combine all history related to this material
   const historyRows = useMemo(() => {
     const logs = logRows.filter((r) => r.materialName === materialName);
@@ -26,8 +27,15 @@ export function MaterialHistory({ materialName, logRows, leftoverRows, onBack }:
 
   const { items: sortedRows, requestSort, sortConfig } = useSortableData(historyRows, { key: "date", direction: "descending" });
 
+  const isCable = useMemo(() => {
+    return historyRows.some(r => {
+      const u = r.unit?.toLowerCase() || "";
+      return u.includes("meter") || u === "m";
+    });
+  }, [historyRows]);
+
   const handleExportCsv = () => {
-    const headers = ["Tipe", "Nota No.", "WH", "Tanggal", "Source/Dest", "Kode", "Qty", "Unit", "Tagging", "Kondisi", "PIC", "Ket."];
+    const headers = ["Tipe", "Nota No.", "WH", "Tanggal", "Source/Dest", "Kode", "Qty", "Unit", "Site ID", "Site Name", "Tagging", "Kondisi", "PIC", "Ket."];
     const rows = sortedRows.map((r) => [
       `"${r.transactionType || ""}"`,
       `"${r.notaNo || ""}"`,
@@ -37,6 +45,8 @@ export function MaterialHistory({ materialName, logRows, leftoverRows, onBack }:
       `"${r.materialCode || ""}"`,
       `"${r.qty || 0}"`,
       `"${r.unit || ""}"`,
+      `"${r.siteId || ""}"`,
+      `"${r.siteName || ""}"`,
       `"${r.taggingType || ""}"`,
       `"${r.condition || ""}"`,
       `"${r.picDelivery || ""}"`,
@@ -81,8 +91,14 @@ export function MaterialHistory({ materialName, logRows, leftoverRows, onBack }:
                 <SortableHeader label="Kode" sortKey="materialCode" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Qty" sortKey="qty" currentSort={sortConfig} requestSort={requestSort} align="right" />
                 <SortableHeader label="Unit" sortKey="unit" currentSort={sortConfig} requestSort={requestSort} />
-                <SortableHeader label="Tagging" sortKey="taggingType" currentSort={sortConfig} requestSort={requestSort} />
-                <SortableHeader label="Haspel/Drum" sortKey="drumNumber" currentSort={sortConfig} requestSort={requestSort} />
+                <SortableHeader label="Site ID" sortKey="siteId" currentSort={sortConfig} requestSort={requestSort} />
+                <SortableHeader label="Site Name" sortKey="siteName" currentSort={sortConfig} requestSort={requestSort} />
+                {isCable && (
+                  <>
+                    <SortableHeader label="Tagging" sortKey="taggingType" currentSort={sortConfig} requestSort={requestSort} />
+                    <SortableHeader label="Haspel/Drum" sortKey="drumNumber" currentSort={sortConfig} requestSort={requestSort} />
+                  </>
+                )}
                 <SortableHeader label="Ket." sortKey="remarks" currentSort={sortConfig} requestSort={requestSort} />
               </tr>
             </thead>
@@ -97,14 +113,36 @@ export function MaterialHistory({ materialName, logRows, leftoverRows, onBack }:
                   <td className="mono">{row.materialCode}</td>
                   <td className="numeric"><b>{formatNumber(row.qty)}</b></td>
                   <td>{row.unit}</td>
-                  <td><span className="badge" style={{ background: row.taggingType === "LEFTOVERS" ? "var(--orange)" : "var(--blue)", color: "white" }}>{row.taggingType}</span></td>
-                  <td style={{ fontSize: 12, color: "var(--blue)" }}>{row.drumNumber || row.tagId || "-"}</td>
+                  <td>{row.siteId || "-"}</td>
+                  <td>{row.siteName || "-"}</td>
+                  {isCable && (
+                    <>
+                      <td><span className="badge" style={{ background: row.taggingType === "LEFTOVERS" ? "var(--orange)" : "var(--blue)", color: "white" }}>{row.taggingType}</span></td>
+                      <td style={{ fontSize: 12, color: "var(--blue)" }}>
+                        {(() => {
+                          const drumId = row.drumNumber || row.tagId;
+                          if (!drumId) return "-";
+                          if (onDrumClick) {
+                            return (
+                              <span 
+                                onClick={() => onDrumClick(drumId)}
+                                style={{ cursor: "pointer", textDecoration: "underline", color: "var(--primary)", fontWeight: 500 }}
+                              >
+                                {drumId}
+                              </span>
+                            );
+                          }
+                          return drumId;
+                        })()}
+                      </td>
+                    </>
+                  )}
                   <td style={{ fontSize: 11 }}>{row.remarks || "-"}</td>
                 </tr>
               ))}
               {sortedRows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="empty-state" style={{ textAlign: "center", padding: 24, color: "var(--text3)" }}>
+                  <td colSpan={isCable ? 13 : 11} className="empty-state" style={{ textAlign: "center", padding: 24, color: "var(--text3)" }}>
                     Tidak ada history untuk material ini.
                   </td>
                 </tr>

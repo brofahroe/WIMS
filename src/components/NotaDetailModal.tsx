@@ -97,7 +97,7 @@ export function NotaDetailModal({ notaNo, rows, onClose, onUpdateTransaction }: 
               </div>
               <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
                 <span style={{ width: 100, color: "var(--text2)" }}>Tanggal:</span>
-                <strong>{firstRow.date}</strong>
+                <strong>{firstRow.date?.split("T")[0]?.split(" ")[0]}</strong>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <span style={{ width: 100, color: "var(--text2)" }}>Gudang (WH):</span>

@@ -1,5 +1,5 @@
-import { AlertTriangle, Info, Play, Plus, RefreshCcw, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Camera, Info, Play, Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   DeliveryOrder,
   InventoryRow,
@@ -26,6 +26,7 @@ import {
   getAvailableReels,
 } from "../lib/wims";
 import { ReceiptModal } from "./ReceiptModal";
+import { uploadProofImage } from "../lib/supabase";
 
 interface TransactionWorkspaceProps {
   master: MasterData;
@@ -68,6 +69,7 @@ function defaultForm(master: MasterData, defaultWarehouse?: string): Transaction
     remarks: "",
     drumNumber: "",
     haspelSize: "3000",
+    proofLink: "",
   };
 }
 
@@ -91,6 +93,31 @@ export function TransactionWorkspace({
   const [form, setForm] = useState<TransactionFormState>(() => defaultForm(master, defaultWarehouse));
   const [submitted, setSubmitted] = useState(false);
   const [receiptData, setReceiptData] = useState<{ notaNo: string; rows: TransactionRecord[] } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const url = await uploadProofImage(file);
+      if (url) {
+        setField("proofLink", url);
+      } else {
+        alert("Gagal mengunggah foto. Silakan coba lagi.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat mengunggah foto.");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
   
   const material = useMemo(() => getMaterial(materials, form.materialName), [materials, form.materialName]);
   const siteOrder = useMemo(
@@ -470,9 +497,35 @@ export function TransactionWorkspace({
             <input type="text" value={form.carPlate} onChange={(e) => setField("carPlate", e.target.value)} placeholder="cth: B 1234 XY" disabled={tempRows.length > 0} />
           </div>
         </div>
-        <div className="form-group" style={{ marginTop: 12 }}>
-          <label>Keterangan / Remarks</label>
-          <textarea rows={2} value={form.remarks} onChange={(e) => setField("remarks", e.target.value)} placeholder="Catatan tambahan..."></textarea>
+        <div className="form-grid" style={{ marginTop: 12 }}>
+          <div className="form-group">
+            <label>Keterangan / Remarks</label>
+            <textarea rows={2} value={form.remarks} onChange={(e) => setField("remarks", e.target.value)} placeholder="Catatan tambahan..."></textarea>
+          </div>
+          <div className="form-group">
+            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <span>Bukti Foto / GDrive</span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                ref={fileInputRef}
+                style={{ display: "none" }}
+                onChange={handleFileChange}
+              />
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px', fontSize: 11 }}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+              >
+                <Camera size={12} />
+                {isUploading ? "Mengunggah..." : "Ambil Foto"}
+              </button>
+            </label>
+            <input type="url" value={form.proofLink || ""} onChange={(e) => setField("proofLink", e.target.value)} placeholder="Atau paste link file di sini..." disabled={isUploading} />
+          </div>
         </div>
 
         {submitted && liveValidation.errors.length > 0 && (

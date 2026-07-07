@@ -65,6 +65,16 @@ export function ReceiptModal({ notaNo, rows, onClose }: ReceiptModalProps) {
                   <span>{firstRow.picWarehouse}</span>
                 </div>
               )}
+              {firstRow.proofLink && (
+                <div className="meta-row hide-print">
+                  <span>Bukti Dokumen</span>
+                  <span>
+                    <a href={firstRow.proofLink} target="_blank" rel="noreferrer" style={{ color: 'var(--blue)', textDecoration: 'none' }}>
+                      Lihat Bukti ↗
+                    </a>
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="receipt-divider"></div>

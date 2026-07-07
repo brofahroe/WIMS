@@ -88,7 +88,7 @@ export function Sidebar({ activeView, onViewChange, sourceWorkbook, isMinimized 
 
       <div className="sidebar-footer">
         <div><b>Role:</b> {role}</div>
-        <div style={{ marginTop: 4 }}><b>WIMS</b> v3 — {sourceWorkbook}</div>
+        <div style={{ marginTop: 4 }}><b>WIMS</b> v3</div>
       </div>
     </aside>
   );

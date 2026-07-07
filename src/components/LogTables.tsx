@@ -12,10 +12,11 @@ interface LogTablesProps {
   leftoverRows: TransactionRecord[]; // Kept for signature, but unused in UI
   events: any[]; // Kept for signature, but unused in UI
   onMaterialClick?: (materialName: string) => void;
+  onDrumClick?: (drumNumber: string) => void;
   onUpdateTransaction?: (id: string, updates: Partial<TransactionRecord>) => Promise<boolean>;
 }
 
-export function LogTables({ logRows, onMaterialClick, onUpdateTransaction }: LogTablesProps) {
+export function LogTables({ logRows, leftoverRows, events, onMaterialClick, onDrumClick, onUpdateTransaction }: LogTablesProps) {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [selectedNota, setSelectedNota] = useState<string | null>(null);
@@ -74,7 +75,7 @@ export function LogTables({ logRows, onMaterialClick, onUpdateTransaction }: Log
     document.body.removeChild(link);
   };
 
-  const types = ["INBOUND", "OUTBOUND", "BORROW IN", "BORROW OUT", "TRANSFER IN", "TRANSFER OUT", "RETURN IN", "RETURN OUT"];
+  const types = ["INBOUND", "OUTBOUND", "BORROW IN", "BORROW OUT", "TRANSFER IN", "TRANSFER OUT"];
 
   return (
     <div className="page active" id="page-logfile">
@@ -125,6 +126,7 @@ export function LogTables({ logRows, onMaterialClick, onUpdateTransaction }: Log
                 <SortableHeader label="Kode" sortKey="materialCode" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Qty" sortKey="qty" currentSort={sortConfig} requestSort={requestSort} align="right" />
                 <SortableHeader label="Unit" sortKey="unit" currentSort={sortConfig} requestSort={requestSort} />
+                <SortableHeader label="Haspel/Drum" sortKey="drumNumber" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Site ID" sortKey="siteId" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Site Name" sortKey="siteName" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="DO Number" sortKey="doNumber" currentSort={sortConfig} requestSort={requestSort} />
@@ -144,9 +146,16 @@ export function LogTables({ logRows, onMaterialClick, onUpdateTransaction }: Log
                     </span>
                   </td>
                   <td className="mono">
-                    <button className="btn-link" style={{ color: "var(--blue)", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", padding: 0 }} onClick={() => setSelectedNota(row.notaNo)} title="View Detail Nota">
-                      {row.notaNo}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <button className="btn-link" style={{ color: "var(--blue)", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", padding: 0 }} onClick={() => setSelectedNota(row.notaNo)} title="View Detail Nota">
+                        {row.notaNo}
+                      </button>
+                      {row.proofLink && (
+                        <a href={row.proofLink} target="_blank" rel="noreferrer" title="Lihat Bukti GDrive" style={{ color: "var(--blue)", display: 'flex', alignItems: 'center' }}>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                        </a>
+                      )}
+                    </div>
                   </td>
                   <td style={{ color: "var(--blue)" }}>{row.whGci}</td>
                   <td>{row.date?.split(" ")[0]?.split("T")[0]}</td>
@@ -162,6 +171,23 @@ export function LogTables({ logRows, onMaterialClick, onUpdateTransaction }: Log
                   <td className="mono">{row.materialCode}</td>
                   <td className="numeric"><b>{formatNumber(row.qty)}</b></td>
                   <td>{row.unit}</td>
+                  <td style={{ fontSize: 12, color: "var(--blue)" }}>
+                    {(() => {
+                      const drumId = row.drumNumber || row.tagId;
+                      if (!drumId) return "-";
+                      if (onDrumClick) {
+                        return (
+                          <span 
+                            onClick={() => onDrumClick(drumId)}
+                            style={{ cursor: "pointer", textDecoration: "underline", color: "var(--primary)", fontWeight: 500 }}
+                          >
+                            {drumId}
+                          </span>
+                        );
+                      }
+                      return drumId;
+                    })()}
+                  </td>
                   <td>{row.siteId || "-"}</td>
                   <td>{row.siteName || "-"}</td>
                   <td className="mono">{row.doNumber || "-"}</td>

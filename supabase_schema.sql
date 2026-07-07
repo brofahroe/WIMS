@@ -38,6 +38,7 @@ create table public.transactions (
   "inOutQty" text,
   "loCriteria" text,
   "drumNumber" text,
+  "proofLink" text,
   "created_at" timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
