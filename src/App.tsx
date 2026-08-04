@@ -124,7 +124,7 @@ function App() {
       supabase.from('app_settings').select('*').eq('id', 'master').single()
     ]);
 
-    if (txs && txs.length > 0) {
+    if (txs) {
       const active = txs.filter((r: any) => !r.deleted_at);
       setLogRows(active.filter((r: any) => r.source === 'logfile'));
       setLeftoverRows(active.filter((r: any) => r.source === 'leftovers'));
