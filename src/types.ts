@@ -119,6 +119,9 @@ export interface TransactionRecord {
   loCriteria?: string | null;
   drumNumber?: string | null;
   proofLink?: string | null;
+  approvalStatus?: "PENDING" | "APPROVED" | "REJECTED";
+  approvedBy?: string | null;
+  approvedAt?: string | null;
 }
 
 export interface SeedData {
@@ -167,6 +170,7 @@ export interface TransactionFormState {
   drumNumber?: string;
   haspelSize?: string;
   proofLink?: string;
+  requiresApproval?: boolean;
 }
 
 export interface ActionEvent {
@@ -178,7 +182,7 @@ export interface ActionEvent {
   status: "SUCCESS" | "WARNING" | "INFO";
 }
 
-export type ViewKey = "dashboard" | "inbound" | "outbound" | "transfer" | "borrow" | "inventory" | "logfile" | "sites" | "nota" | "material" | "report" | "leftovers" | "material_history" | "delivery_orders" | "site_summary" | "drum_history";
+export type ViewKey = "dashboard" | "inbound" | "outbound" | "transfer_borrow" | "inventory" | "logfile" | "sites" | "nota" | "material" | "report" | "leftovers" | "material_history" | "delivery_orders" | "drum_history" | "drum_summary";
 
 export type UserRole = "Admin" | "Manager" | "Staff Gudang";
 
@@ -186,4 +190,15 @@ export interface User {
   id: string;
   email: string;
   role: UserRole;
+}
+
+export interface AuditTrail {
+  id: string;
+  action: string;
+  tableName: string;
+  recordId: string | null;
+  oldValues: Record<string, unknown> | null;
+  newValues: Record<string, unknown> | null;
+  performedBy: string | null;
+  performedAt: string;
 }

@@ -1,4 +1,4 @@
-import { AlertTriangle, Camera, Info, Play, Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, Camera, Info, Plus, RefreshCcw, Trash2, QrCode } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   DeliveryOrder,
@@ -27,6 +27,7 @@ import {
 } from "../lib/wims";
 import { ReceiptModal } from "./ReceiptModal";
 import { uploadProofImage } from "../lib/supabase";
+import { QrScanner } from "./QrScanner";
 
 interface TransactionWorkspaceProps {
   master: MasterData;
@@ -44,7 +45,7 @@ interface TransactionWorkspaceProps {
     ? (result: T extends object ? T : never) => void
     : never;
   onPrintNota?: () => void;
-  transactionGroup?: "INBOUND" | "OUTBOUND" | "TRANSFER" | "BORROW";
+  transactionGroups?: ("INBOUND" | "OUTBOUND" | "TRANSFER" | "BORROW")[];
   defaultWarehouse?: string;
 }
 
@@ -87,14 +88,30 @@ export function TransactionWorkspace({
   onClearTemp,
   onProcess,
   onPrintNota,
-  transactionGroup,
+  transactionGroups,
   defaultWarehouse,
 }: TransactionWorkspaceProps) {
   const [form, setForm] = useState<TransactionFormState>(() => defaultForm(master, defaultWarehouse));
   const [submitted, setSubmitted] = useState(false);
   const [receiptData, setReceiptData] = useState<{ notaNo: string; rows: TransactionRecord[] } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [showQrScanner, setShowQrScanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleQrScan = (result: string) => {
+    setShowQrScanner(false);
+    const trimmed = result.trim();
+    const material = getMaterial(materials, trimmed);
+    if (material) {
+      setField("materialName", trimmed);
+      return;
+    }
+    const drumMatch = [...logRows, ...leftoverRows].find(r => r.drumNumber === trimmed || r.tagId === trimmed);
+    if (drumMatch) {
+      setField("materialName", drumMatch.materialName || "");
+      setField("drumNumber", trimmed || "");
+    }
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -265,23 +282,26 @@ export function TransactionWorkspace({
   };
 
   const filteredTxTypes = useMemo(() => {
+    if (!transactionGroups || transactionGroups.length === 0) return master.transactionTypes;
     return master.transactionTypes.filter((type) => {
-      if (!transactionGroup) return true;
       const upper = type.toUpperCase();
-      if (transactionGroup === "INBOUND") return upper.includes("INBOUND");
-      if (transactionGroup === "OUTBOUND") return upper.includes("OUTBOUND");
-      if (transactionGroup === "TRANSFER") return upper.includes("TRANSFER");
-      if (transactionGroup === "BORROW") return upper.includes("BORROW") || upper.includes("RETURN");
-      return true;
+      return transactionGroups.some((group) => {
+        if (group === "INBOUND") return upper.includes("INBOUND");
+        if (group === "OUTBOUND") return upper.includes("OUTBOUND");
+        if (group === "TRANSFER") return upper.includes("TRANSFER");
+        if (group === "BORROW") return upper.includes("BORROW") || upper.includes("RETURN");
+        return false;
+      });
     });
-  }, [master.transactionTypes, transactionGroup]);
+  }, [master.transactionTypes, transactionGroups]);
 
   const filteredSources = useMemo(() => {
-    if (transactionGroup === "BORROW") {
+    if (!transactionGroups || transactionGroups.length === 0) return master.sources;
+    if (transactionGroups.includes("BORROW")) {
       return master.sources.filter(s => s.toLowerCase().includes("other subcon"));
     }
     return master.sources;
-  }, [master.sources, transactionGroup]);
+  }, [master.sources, transactionGroups]);
 
   useEffect(() => {
     if (filteredTxTypes.length === 1 && form.transactionType !== filteredTxTypes[0]) {
@@ -380,6 +400,11 @@ export function TransactionWorkspace({
               ))}
             </select>
           </div>
+          <div className="form-group" style={{ display: "flex", alignItems: "flex-end" }}>
+            <button type="button" className="btn btn-sm" onClick={() => setShowQrScanner(true)} style={{ marginBottom: 8 }}>
+              <QrCode size={14} style={{ marginRight: 6 }} /> Scan QR
+            </button>
+          </div>
           <div className="form-group">
             <label>Kode Material (Auto)</label>
             <input type="text" value={material?.materialCode || ""} readOnly placeholder="—" />
@@ -437,7 +462,7 @@ export function TransactionWorkspace({
           )}
         </div>
 
-        {transactionGroup !== "TRANSFER" && (
+        {!(transactionGroups && transactionGroups.length === 1 && transactionGroups[0] === "TRANSFER") && (
           <>
             <div className="form-section">Informasi Site</div>
             <div className="form-grid-3">
@@ -615,6 +640,25 @@ export function TransactionWorkspace({
           rows={receiptData.rows}
           onClose={() => setReceiptData(null)}
         />
+      )}
+
+      {showQrScanner && (
+        <div className="modal-backdrop" onClick={() => setShowQrScanner(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480, width: "90%" }}>
+            <div className="modal-header" style={{ justifyContent: "space-between" }}>
+              <h3 style={{ margin: 0, fontSize: 16 }}>Scan QR Material / Drum</h3>
+              <button className="btn-icon" onClick={() => setShowQrScanner(false)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <QrScanner
+                onScan={handleQrScan}
+                onClose={() => setShowQrScanner(false)}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

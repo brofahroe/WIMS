@@ -3,7 +3,6 @@ import {
   ArrowUpFromLine,
   ClipboardList,
   Database,
-  Handshake,
   LayoutDashboard,
   MapPin,
   PackageOpen,
@@ -16,28 +15,26 @@ import type { ViewKey, UserRole } from "../types";
 interface SidebarProps {
   activeView: ViewKey;
   onViewChange: (view: ViewKey) => void;
-  sourceWorkbook: string;
   isMinimized?: boolean;
   role?: UserRole;
 }
 
-export function Sidebar({ activeView, onViewChange, sourceWorkbook, isMinimized = false, role = "Admin" }: SidebarProps) {
-  let navItemsUtama: Array<{ key: ViewKey; label: string; icon: React.ComponentType<{ size?: number }> }> = [
+export function Sidebar({ activeView, onViewChange, isMinimized = false, role = "Admin" }: SidebarProps) {
+  const navItemsUtama: Array<{ key: ViewKey; label: string; icon: React.ComponentType<{ size?: number }> }> = [
     { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   ];
 
   let navItemsTransaksi: Array<{ key: ViewKey; label: string; icon: React.ComponentType<{ size?: number }> }> = [
     { key: "inbound", label: "Barang Masuk", icon: ArrowDownToLine },
     { key: "outbound", label: "Barang Keluar", icon: ArrowUpFromLine },
-    { key: "transfer", label: "Transfer Gudang", icon: Repeat },
-    { key: "borrow", label: "Peminjaman", icon: Handshake },
+    { key: "transfer_borrow", label: "Transfer & Peminjaman", icon: Repeat },
   ];
 
   let navItemsData: Array<{ key: ViewKey; label: string; icon: React.ComponentType<{ size?: number }> }> = [
     { key: "logfile", label: "Logfile Transaksi", icon: Database },
     { key: "inventory", label: "Stok Material", icon: PackageOpen },
     { key: "leftovers", label: "Leftovers & LO", icon: ReceiptText },
-    { key: "site_summary", label: "Summary Outbound Site", icon: Database },
+    { key: "drum_summary", label: "Summary Haspel", icon: Database },
   ];
 
   let navItemsRef: Array<{ key: ViewKey; label: string; icon: React.ComponentType<{ size?: number }> }> = [

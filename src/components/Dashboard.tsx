@@ -1,13 +1,11 @@
-import React, { useState } from "react";
-import type { ActionEvent, InventoryRow, TransactionRecord } from "../types";
+import React, { useMemo, useState } from "react";
+import type { InventoryRow, TransactionRecord } from "../types";
 import { formatNumber } from "../lib/wims";
 
 interface DashboardProps {
   inventory: InventoryRow[];
   logRows: TransactionRecord[];
   leftoverRows: TransactionRecord[];
-  tempRows: TransactionRecord[];
-  events: ActionEvent[];
   onMaterialClick?: (materialName: string) => void;
 }
 
@@ -22,7 +20,7 @@ const TX_BADGE: Record<string, string> = {
   "RETURN OUT": "badge-return",
 };
 
-export function Dashboard({ inventory, logRows, leftoverRows, tempRows, events, onMaterialClick }: DashboardProps) {
+export function Dashboard({ inventory, logRows, leftoverRows, onMaterialClick }: DashboardProps) {
   const [timeFilter, setTimeFilter] = useState<"semua" | "bulan" | "minggu" | "hari">("semua");
 
   const filterByTime = (dateStr: string | undefined | null) => {
@@ -45,14 +43,33 @@ export function Dashboard({ inventory, logRows, leftoverRows, tempRows, events, 
   const filteredLeftoverRows = leftoverRows.filter(r => filterByTime(r.date));
 
   const totalTx = filteredLogRows.length + filteredLeftoverRows.length;
-  const inboundCount = filteredLogRows.filter((r) => (r.transactionType || "").includes("INBOUND")).length;
-  const outboundCount = filteredLogRows.filter((r) => (r.transactionType || "").includes("OUTBOUND")).length;
+  const inboundCount = filteredLogRows.filter((r) => {
+    const type = (r.transactionType || "").toUpperCase();
+    return type.includes(" IN") || type === "INBOUND";
+  }).length;
+  
+  const outboundCount = filteredLogRows.filter((r) => {
+    const type = (r.transactionType || "").toUpperCase();
+    return type.includes(" OUT") || type === "OUTBOUND";
+  }).length;
   const activeItemsCount = inventory.length;
 
   const criticalStock = [...inventory]
     .filter((item) => item.stockWhCalc <= 5)
     .sort((a, b) => a.stockWhCalc - b.stockWhCalc)
     .slice(0, 8);
+
+  const reorderAlerts = useMemo(() => {
+    return inventory
+      .filter((item: InventoryRow) => {
+        const stock = item.stockWhCalc;
+        const unit = (item.unit || "").toLowerCase();
+        if (unit === "meter") return stock < 1000;
+        return stock < 20;
+      })
+      .sort((a, b) => a.stockWhCalc - b.stockWhCalc)
+      .slice(0, 8);
+  }, [inventory]);
 
   const zteStock = inventory.filter((item) => item.typeMaterial === "ZTE Material");
   const emrStock = inventory.filter((item) => item.typeMaterial === "EMR Material");
@@ -138,7 +155,8 @@ export function Dashboard({ inventory, logRows, leftoverRows, tempRows, events, 
           {/* Critical Stock */}
           <div className="card">
             <div className="card-header"><span className="card-title">⚠ Stok Kritis (≤ 5)</span></div>
-            <table>
+            <div className="table-scroll">
+              <table>
               <thead>
                 <tr>
                   <th>Material</th>
@@ -180,6 +198,54 @@ export function Dashboard({ inventory, logRows, leftoverRows, tempRows, events, 
                 )}
               </tbody>
             </table>
+            </div>
+          </div>
+
+          {/* Reorder Alerts */}
+          <div className="card" style={{ marginTop: 20 }}>
+            <div className="card-header"><span className="card-title">Reorder Alerts</span></div>
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Material</th>
+                    <th>Kode</th>
+                    <th>Unit</th>
+                    <th>Stok WH</th>
+                    <th>Threshold</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reorderAlerts.map((item) => {
+                    const unit = (item.unit || "").toLowerCase();
+                    const threshold = unit === "meter" ? 1000 : 20;
+                    return (
+                      <tr key={item.materialCode}>
+                        <td>
+                          <span
+                            style={{ cursor: "pointer", color: "var(--blue)", textDecoration: "underline" }}
+                            onClick={() => onMaterialClick && onMaterialClick(item.materialName || "")}
+                          >
+                            {item.materialName}
+                          </span>
+                        </td>
+                        <td className="mono">{item.materialCode}</td>
+                        <td>{item.unit}</td>
+                        <td className={item.stockWhCalc <= 0 ? "stock-low" : "stock-warn"}>{formatNumber(item.stockWhCalc)}</td>
+                        <td>{threshold}</td>
+                        <td>
+                          <span className="badge" style={{ background: "#FEF3C7", color: "#92400E" }}>Reorder</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {reorderAlerts.length === 0 && (
+                    <tr><td colSpan={6} style={{ textAlign: "center", padding: 20, color: "var(--text3)" }}>Tidak ada material yang perlu di-reorder.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Stock by Category */}
@@ -221,7 +287,8 @@ export function Dashboard({ inventory, logRows, leftoverRows, tempRows, events, 
           {/* Transaction Summary by Type */}
           <div className="card">
             <div className="card-header"><span className="card-title">Ringkasan Tipe Transaksi</span></div>
-            <table>
+            <div className="table-scroll">
+              <table>
               <thead>
                 <tr>
                   <th>Tipe Transaksi</th>
@@ -240,6 +307,7 @@ export function Dashboard({ inventory, logRows, leftoverRows, tempRows, events, 
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       </div>

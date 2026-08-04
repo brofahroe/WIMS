@@ -1,9 +1,10 @@
-import { ArrowLeft, Download } from "lucide-react";
-import { useMemo } from "react";
+import { ArrowLeft, Download, QrCode } from "lucide-react";
+import { useMemo, useState } from "react";
 import type { TransactionRecord } from "../types";
 import { formatNumber } from "../lib/wims";
 import { useSortableData } from "../hooks/useSortableData";
 import { SortableHeader } from "./SortableHeader";
+import { QrDisplay } from "./QrDisplay";
 
 interface DrumHistoryProps {
   drumNumber: string;
@@ -13,6 +14,7 @@ interface DrumHistoryProps {
 }
 
 export function DrumHistory({ drumNumber, logRows, leftoverRows, onBack }: DrumHistoryProps) {
+  const [showQr, setShowQr] = useState(false);
   const allRows = useMemo(() => {
     return [...logRows, ...leftoverRows]
       .filter(
@@ -40,9 +42,9 @@ export function DrumHistory({ drumNumber, logRows, leftoverRows, onBack }: DrumH
       const qty = Number(row.qty) || 0;
       
       const type = (row.transactionType || "").toUpperCase();
-      if (type.includes("INBOUND") || type === "RETURN IN") {
+      if (type.includes(" IN") || type === "INBOUND") {
         totalIn += qty;
-      } else if (type.includes("OUTBOUND") || type === "TRANSFER OUT" || type === "BORROW OUT") {
+      } else if (type.includes(" OUT") || type === "OUTBOUND") {
         totalOut += qty;
       }
     }
@@ -127,6 +129,9 @@ export function DrumHistory({ drumNumber, logRows, leftoverRows, onBack }: DrumH
           </div>
 
           <div style={{ display: "flex", gap: "8px" }}>
+            <button className="btn btn-secondary" onClick={() => setShowQr(true)} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <QrCode size={14} /> QR
+            </button>
             <button className="btn btn-secondary" onClick={handleExportCsv} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
               <Download size={14} /> EXPORT CSV
             </button>
@@ -186,6 +191,20 @@ export function DrumHistory({ drumNumber, logRows, leftoverRows, onBack }: DrumH
           </table>
         </div>
       </div>
+
+      {showQr && (
+        <div className="modal-backdrop" onClick={() => setShowQr(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360, textAlign: "center" }}>
+            <div className="modal-header" style={{ justifyContent: "space-between" }}>
+              <h3 style={{ margin: 0, fontSize: 16 }}>QR Code Haspel</h3>
+              <button className="btn-icon" onClick={() => setShowQr(false)}><ArrowLeft size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ display: "flex", justifyContent: "center", padding: 24 }}>
+              <QrDisplay value={drumNumber} title={drumNumber} size={180} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { RotateCcw, Warehouse, Menu, LogOut } from "lucide-react";
+import { RotateCcw, Warehouse, Menu, LogOut, WifiOff, CloudOff, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import seedDataJson from "./data/seedData.json";
 import { Dashboard } from "./components/Dashboard";
@@ -13,12 +13,16 @@ import { ReportExport } from "./components/ReportExport";
 import { Leftovers } from "./components/Leftovers";
 import { MaterialHistory } from "./components/MaterialHistory";
 import { DeliveryOrders } from "./components/DeliveryOrders";
-import { SiteSummaryOutbound } from "./components/SiteSummaryOutbound";
 import { DrumHistory } from "./components/DrumHistory";
-import type { ActionEvent, SeedData, TransactionRecord, ViewKey, User } from "./types";
+import { DrumSummary } from "./components/DrumSummary";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import type { ActionEvent, SeedData, TransactionRecord, ViewKey, User, UserRole } from "./types";
 import { LoginPage } from "./components/LoginPage";
-import { buildRecentEvents, calculateInventory, saveStorage, useSeedOrStorage } from "./lib/wims";
-import { supabase, fetchAll, getUserRole } from "./lib/supabase";
+import { buildRecentEvents, calculateInventory, createAuditTrail, saveStorage, useSeedOrStorage } from "./lib/wims";
+import { supabase, fetchAll, getUserRole, insertAuditTrail } from "./lib/supabase";
+import { useIdleTimer } from "./hooks/useIdleTimer";
+import { useOfflineSync } from "./hooks/useOfflineSync";
+import { enqueueInsert, enqueueUpdate, enqueueDelete } from "./lib/offlineQueue";
 
 const seedData = seedDataJson as unknown as SeedData;
 
@@ -33,8 +37,7 @@ const VIEW_TITLES: Record<ViewKey, string> = {
   dashboard: "Dashboard",
   inbound: "Input Barang Masuk (Inbound)",
   outbound: "Input Barang Keluar (Outbound)",
-  transfer: "Transfer Gudang",
-  borrow: "Peminjaman / Pengembalian",
+  transfer_borrow: "Transfer & Peminjaman",
   inventory: "Stok Material",
   logfile: "Logfile Transaksi",
   leftovers: "Leftovers & LO",
@@ -44,8 +47,25 @@ const VIEW_TITLES: Record<ViewKey, string> = {
   nota: "Nota Print",
   material_history: "History Material",
   delivery_orders: "Delivery Orders",
-  site_summary: "Summary Outbound Site",
   drum_history: "History Haspel",
+  drum_summary: "Summary Haspel",
+};
+
+const ROLE_ALLOWED_VIEWS: Record<UserRole, ViewKey[]> = {
+  Admin: [
+    "dashboard","inbound","outbound","transfer_borrow","inventory","logfile",
+    "leftovers","sites","material","report","nota","material_history",
+    "delivery_orders","drum_history","drum_summary",
+  ],
+  Manager: [
+    "dashboard","inventory","logfile","sites","material","report",
+    "nota","material_history","delivery_orders","drum_history","drum_summary",
+  ],
+  "Staff Gudang": [
+    "dashboard","inbound","outbound","transfer_borrow","inventory",
+    "leftovers","sites","report","nota","material_history",
+    "delivery_orders","drum_history","drum_summary",
+  ],
 };
 
 function App() {
@@ -55,7 +75,20 @@ function App() {
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
   const [selectedDrumNumber, setSelectedDrumNumber] = useState<string | null>(null);
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(() => window.innerWidth <= 860);
-  
+  const [idleWarning, setIdleWarning] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [syncToast, setSyncToast] = useState<string | null>(null);
+
+  // Hybrid cache: sync queue saat kembali online, reload data fresh dari Supabase
+  const { isOnline, pendingCount, isSyncing, syncNow } = useOfflineSync(
+    // Callback saat sync berhasil: reload data agar UI menampilkan data terbaru
+    useCallback(() => {
+      loadData();
+      setSyncToast(`Sinkronisasi selesai — data diperbarui.`);
+      setTimeout(() => setSyncToast(null), 4000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );  
   const [master, setMaster] = useState(seedData.master);
   const [materials, setMaterials] = useState(seedData.materials);
   const [deliveryOrders, setDeliveryOrders] = useState(seedData.deliveryOrders);
@@ -92,9 +125,10 @@ function App() {
     ]);
 
     if (txs && txs.length > 0) {
-      setLogRows(txs.filter((r: any) => r.source === 'logfile'));
-      setLeftoverRows(txs.filter((r: any) => r.source === 'leftovers'));
-      setEvents(buildRecentEvents(txs));
+      const active = txs.filter((r: any) => !r.deleted_at);
+      setLogRows(active.filter((r: any) => r.source === 'logfile'));
+      setLeftoverRows(active.filter((r: any) => r.source === 'leftovers'));
+      setEvents(buildRecentEvents(active));
     }
     
     if (mats && mats.length > 0) setMaterials(mats);
@@ -131,12 +165,16 @@ function App() {
           // Timeout for getUserRole in case Supabase is paused/hanging
           const rolePromise = getUserRole(session.user.id);
           const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
-          const role = await Promise.race([rolePromise, timeoutPromise]) as string | null;
+           const role = await Promise.race([rolePromise, timeoutPromise]) as string | null;
+          
+          if (!role) {
+            console.warn(`Role tidak ditemukan untuk user ${session.user.id}. Silakan jalankan SQL untuk mengatur role di tabel user_roles.`);
+          }
           
           setCurrentUser({
             id: session.user.id,
             email: session.user.email || '',
-            role: (role as any) || 'Staff Gudang'
+            role: (role === 'Admin' || role === 'Manager' || role === 'Staff Gudang' ? role : 'Staff Gudang') as UserRole
           });
         } catch (error) {
           console.warn("Failed or timed out fetching user role:", error);
@@ -158,6 +196,67 @@ function App() {
       subscription.unsubscribe();
     };
   }, [loadData, isSupabaseEnabled]);
+
+  useEffect(() => {
+    if (!isSupabaseEnabled) return;
+    const channel = supabase
+      .channel('realtime-transactions')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'transactions' }, (payload) => {
+        const row = payload.new as any;
+        if (row.deleted_at) return;
+        if (row.source === 'logfile') {
+          setLogRows((current) => {
+            const exists = current.some((r) => r.id === row.id);
+            return exists ? current : [row, ...current];
+          });
+        } else if (row.source === 'leftovers') {
+          setLeftoverRows((current) => {
+            const exists = current.some((r) => r.id === row.id);
+            return exists ? current : [row, ...current];
+          });
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'transactions' }, (payload) => {
+        const row = payload.new as any;
+        if (row.deleted_at) {
+          setLogRows((current) => current.filter((r) => r.id !== row.id));
+          setLeftoverRows((current) => current.filter((r) => r.id !== row.id));
+          return;
+        }
+        if (row.source === 'logfile') {
+          setLogRows((current) => current.map((r) => r.id === row.id ? row : r));
+        } else if (row.source === 'leftovers') {
+          setLeftoverRows((current) => current.map((r) => r.id === row.id ? row : r));
+        }
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'transactions' }, (payload) => {
+        const row = payload.old as any;
+        setLogRows((current) => current.filter((r) => r.id !== row.id));
+        setLeftoverRows((current) => current.filter((r) => r.id !== row.id));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isSupabaseEnabled]);
+
+  // Sinkronisasi isOffline state dengan status jaringan nyata dari useOfflineSync
+  useEffect(() => {
+    setIsOffline(!isOnline);
+  }, [isOnline]);
+
+  useIdleTimer({
+    onIdle: () => {
+      if (currentUser && isSupabaseEnabled) {
+        supabase.auth.signOut();
+      }
+    },
+    onWarning: (remainingMs) => {
+      setIdleWarning(true);
+      setTimeout(() => setIdleWarning(false), remainingMs);
+    },
+  });
 
   useEffect(() => { if (!isSupabaseEnabled) saveStorage(STORAGE_KEYS.logRows, logRows); }, [logRows, isSupabaseEnabled]);
   useEffect(() => { if (!isSupabaseEnabled) saveStorage(STORAGE_KEYS.leftoverRows, leftoverRows); }, [leftoverRows, isSupabaseEnabled]);
@@ -184,38 +283,136 @@ function App() {
     setActiveView("drum_history");
   }, []);
 
+  const handleViewChange = useCallback((view: ViewKey) => {
+    if (!currentUser) return;
+    const allowed = ROLE_ALLOWED_VIEWS[currentUser.role] || [];
+    if (!allowed.includes(view)) {
+      setActiveView("dashboard");
+      return;
+    }
+    setActiveView(view);
+  }, [currentUser]);
+
   const handleUpdateTransaction = async (id: string, updates: Partial<TransactionRecord>) => {
     if (isSupabaseEnabled) {
-      const { error } = await supabase.from('transactions').update(updates).eq('id', id);
-      if (error) {
-        console.error("Failed to update transaction:", error);
-        alert("Gagal mengupdate transaksi di Supabase");
-        return false;
+      if (!isOnline) {
+        // Offline: simpan ke queue, update lokal langsung
+        enqueueUpdate('transactions', id, updates as Record<string, unknown>);
+      } else {
+        const { error } = await supabase.from('transactions').update(updates).eq('id', id);
+        if (error) {
+          console.error("Failed to update transaction:", error);
+          alert("Gagal mengupdate transaksi di Supabase");
+          return false;
+        }
+        insertAuditTrail(
+          createAuditTrail({
+            action: 'UPDATE',
+            tableName: 'transactions',
+            recordId: id,
+            oldValues: null,
+            newValues: updates as Record<string, unknown>,
+            performedBy: currentUser?.id ?? null,
+          }),
+        );
       }
     }
-    
-    setLogRows((current) => 
+
+    setLogRows((current) =>
       current.map(row => row.id === id ? { ...row, ...updates } : row)
     );
-    setLeftoverRows((current) => 
+    setLeftoverRows((current) =>
       current.map(row => row.id === id ? { ...row, ...updates } : row)
     );
     return true;
   };
 
-  const getTransactionGroup = (view: ViewKey) => {
+  const handleSoftDeleteTransaction = async (id: string) => {
+    if (!window.confirm("Yakin ingin menghapus transaksi ini? Data akan ditandai sebagai dihapus.")) return false;
+    const updates = { deleted_at: new Date().toISOString() };
+    if (isSupabaseEnabled) {
+      if (!isOnline) {
+        enqueueDelete('transactions', id);
+      } else {
+        const { error } = await supabase.from('transactions').update(updates).eq('id', id);
+        if (error) {
+          console.error("Failed to soft delete transaction:", error);
+          alert("Gagal menghapus transaksi di Supabase");
+          return false;
+        }
+        insertAuditTrail(
+          createAuditTrail({
+            action: 'SOFT_DELETE',
+            tableName: 'transactions',
+            recordId: id,
+            newValues: updates as Record<string, unknown>,
+            performedBy: currentUser?.id ?? null,
+          }),
+        );
+      }
+    }
+    setLogRows((current) => current.filter(row => row.id !== id));
+    setLeftoverRows((current) => current.filter(row => row.id !== id));
+    return true;
+  };
+
+  const handleApproveTransaction = async (id: string) => {
+    const updates = { approval_status: "APPROVED" as const, approved_by: currentUser?.id ?? null, approved_at: new Date().toISOString() };
+    if (isSupabaseEnabled) {
+      const { error } = await supabase.from('transactions').update(updates).eq('id', id);
+      if (error) {
+        alert("Gagal approve transaksi");
+        return;
+      }
+      insertAuditTrail(
+        createAuditTrail({
+          action: 'APPROVE',
+          tableName: 'transactions',
+          recordId: id,
+          newValues: updates as Record<string, unknown>,
+          performedBy: currentUser?.id ?? null,
+        }),
+      );
+    }
+    setLogRows((current) => current.map(row => row.id === id ? { ...row, ...updates } : row));
+    setLeftoverRows((current) => current.map(row => row.id === id ? { ...row, ...updates } : row));
+  };
+
+  const handleRejectTransaction = async (id: string) => {
+    if (!window.confirm("Yakin ingin menolak transaksi ini?")) return;
+    const updates = { approval_status: "REJECTED" as const, approved_by: currentUser?.id ?? null, approved_at: new Date().toISOString() };
+    if (isSupabaseEnabled) {
+      const { error } = await supabase.from('transactions').update(updates).eq('id', id);
+      if (error) {
+        alert("Gagal reject transaksi");
+        return;
+      }
+      insertAuditTrail(
+        createAuditTrail({
+          action: 'REJECT',
+          tableName: 'transactions',
+          recordId: id,
+          newValues: updates as Record<string, unknown>,
+          performedBy: currentUser?.id ?? null,
+        }),
+      );
+    }
+    setLogRows((current) => current.map(row => row.id === id ? { ...row, ...updates } : row));
+    setLeftoverRows((current) => current.map(row => row.id === id ? { ...row, ...updates } : row));
+  };
+
+  const getTransactionGroup = (view: ViewKey): ("INBOUND" | "OUTBOUND" | "TRANSFER" | "BORROW")[] | undefined => {
     switch (view) {
-      case "inbound": return "INBOUND";
-      case "outbound": return "OUTBOUND";
-      case "transfer": return "TRANSFER";
-      case "borrow": return "BORROW";
+      case "inbound": return ["INBOUND"];
+      case "outbound": return ["OUTBOUND"];
+      case "transfer_borrow": return ["TRANSFER", "BORROW"];
       default: return undefined;
     }
   };
 
   const transactionWorkspace = (
     <TransactionWorkspace
-      transactionGroup={getTransactionGroup(activeView)}
+      transactionGroups={getTransactionGroup(activeView) as any}
       defaultWarehouse={warehouseFilter}
       master={master}
       materials={materials}
@@ -233,13 +430,36 @@ function App() {
         setLeftoverRows(result.nextLeftoverRows);
         setEvents((current) => [...result.events, ...current].slice(0, 80));
         setTempRows([]);
-        
+
         if (isSupabaseEnabled && result.newRows && result.newRows.length > 0) {
+          if (!isOnline) {
+            // Offline: simpan ke antrian, tampilkan notifikasi
+            enqueueInsert('transactions', result.newRows);
+            setSyncToast(`${result.newRows.length} transaksi disimpan lokal — akan disync saat online.`);
+            setTimeout(() => setSyncToast(null), 5000);
+            return;
+          }
+
           const { error } = await supabase.from('transactions').insert(result.newRows);
           if (error) {
             console.error("Failed to insert to Supabase:", error);
-            alert(`Gagal menyimpan ke Supabase. Error: ${error.message || JSON.stringify(error)}\nSilakan cek koneksi atau hubungi admin.`);
+            // Masukkan ke queue agar bisa di-retry nanti
+            enqueueInsert('transactions', result.newRows);
+            alert(
+              `Transaksi disimpan lokal, tetapi GAGAL disinkronkan ke Supabase.\n\nError: ${error.message || JSON.stringify(error)}\n\nAkan dicoba ulang otomatis saat koneksi stabil.`
+            );
+            return;
           }
+          const auditEntries = result.newRows.map((row) =>
+            createAuditTrail({
+              action: 'INSERT',
+              tableName: 'transactions',
+              recordId: row.id,
+              newValues: row as unknown as Record<string, unknown>,
+              performedBy: currentUser?.id ?? null,
+            }),
+          );
+          await Promise.all(auditEntries.map((entry) => insertAuditTrail(entry)));
         }
       }}
       onPrintNota={() => setActiveView("nota")}
@@ -255,10 +475,46 @@ function App() {
   }
 
   return (
-    <div>
+    <ErrorBoundary
+      fallback={
+        <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center' }}>
+            <h2 style={{ color: 'var(--red)' }}>Terjadi kesalahan tidak terduga</h2>
+            <button type="button" className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => window.location.reload()}>Muat Ulang Aplikasi</button>
+          </div>
+        </div>
+      }
+    >
+      <div>
+      {/* ── Banner offline ─────────────────────────────────────────────── */}
+      {isOffline && (
+        <div style={{
+          background: '#92400e', color: 'white', textAlign: 'center',
+          padding: '6px 16px', fontSize: 13, display: 'flex',
+          alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          <WifiOff size={14} />
+          <span>Mode Offline — data ditampilkan dari cache. Transaksi baru akan disimpan lokal dan disync otomatis saat online.</span>
+        </div>
+      )}
+
+      {/* ── Toast notifikasi sync ───────────────────────────────────────── */}
+      {syncToast && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+          background: 'var(--green, #10b981)', color: 'white',
+          padding: '10px 18px', borderRadius: 8, fontSize: 13,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <RefreshCw size={14} />
+          {syncToast}
+        </div>
+      )}
+
       <header className="app-header">
         <div className="logo">
-          <button 
+          <button
             type="button"
             onClick={() => setIsSidebarMinimized(!isSidebarMinimized)}
             style={{ display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px' }}
@@ -274,19 +530,47 @@ function App() {
         </div>
         <div className="header-right">
           <div className="user-info" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '16px' }}>
-            <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>{currentUser.email}</span>
+            <span className="hide-mobile" style={{ fontSize: '0.875rem', fontWeight: 600 }}>{currentUser.email}</span>
             <span className="wh-badge" style={{ background: '#0f172a', color: 'white' }}>{currentUser.role}</span>
             <button onClick={() => supabase.auth.signOut()} title="Logout" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text2)' }}>
                <LogOut size={16} />
             </button>
           </div>
-          {isSupabaseEnabled && <span className="wh-badge" style={{ background: "var(--success)", color: "white" }}>☁️ Supabase</span>}
-          <span className="wh-badge">📍 {warehouseFilter === "ALL" ? "All Warehouses" : warehouseFilter}</span>
-          <span style={{ fontSize: 12, color: "var(--text3)" }}>
+
+          {/* ── Status koneksi & pending badge ─────────────────────────── */}
+          {isSupabaseEnabled && (
+            isOffline ? (
+              <span className="wh-badge hide-mobile" style={{ background: '#92400e', color: 'white', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <CloudOff size={12} /> Offline
+              </span>
+            ) : (
+              <span className="wh-badge hide-mobile" style={{ background: "var(--success)", color: "white" }}>☁️ Supabase</span>
+            )
+          )}
+
+          {/* Badge pending sync — hanya tampil jika ada item di queue */}
+          {isSupabaseEnabled && pendingCount > 0 && (
+            <button
+              className="wh-badge hide-mobile"
+              onClick={syncNow}
+              disabled={isSyncing || !isOnline}
+              title={isOnline ? `Klik untuk sync ${pendingCount} transaksi pending` : 'Akan disync otomatis saat online'}
+              style={{
+                background: '#d97706', color: 'white', border: 'none', cursor: isOnline ? 'pointer' : 'default',
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}
+            >
+              <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
+              {isSyncing ? 'Syncing...' : `${pendingCount} pending`}
+            </button>
+          )}
+
+          <span className="wh-badge hide-mobile">📍 {warehouseFilter === "ALL" ? "All Warehouses" : warehouseFilter}</span>
+          <span className="hide-mobile" style={{ fontSize: 12, color: "var(--text3)" }}>
             {new Date().toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
           </span>
           {currentUser.role !== "Manager" && (
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => setActiveView("outbound")}>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => handleViewChange("outbound")}>
               + Transaksi Baru
             </button>
           )}
@@ -294,7 +578,7 @@ function App() {
       </header>
 
       <div className="app-body">
-        <Sidebar activeView={activeView} onViewChange={setActiveView} sourceWorkbook={seedData.sourceWorkbook} isMinimized={isSidebarMinimized} role={currentUser.role} />
+        <Sidebar activeView={activeView} onViewChange={handleViewChange} isMinimized={isSidebarMinimized} role={currentUser.role} />
 
         <main className="main">
           <div className="page-header">
@@ -324,9 +608,9 @@ function App() {
 
           <div className="content">
             {activeView === "dashboard" ? (
-              <Dashboard inventory={inventory} logRows={logRows} leftoverRows={leftoverRows} tempRows={tempRows} events={events} onMaterialClick={handleMaterialClick} />
+              <Dashboard inventory={inventory} logRows={logRows} leftoverRows={leftoverRows} onMaterialClick={handleMaterialClick} />
             ) : null}
-            {["inbound", "outbound", "transfer", "borrow"].includes(activeView) ? transactionWorkspace : null}
+            {["inbound", "outbound", "transfer_borrow"].includes(activeView) ? transactionWorkspace : null}
             {activeView === "inventory" ? (
               <InventorySummary
                 inventory={inventory}
@@ -336,12 +620,14 @@ function App() {
                 onMaterialClick={handleMaterialClick}
               />
             ) : null}
-            {activeView === "logfile" ? <LogTables logRows={logRows} leftoverRows={leftoverRows} events={events} onMaterialClick={handleMaterialClick} onDrumClick={handleDrumClick} onUpdateTransaction={handleUpdateTransaction} /> : null}
+             {activeView === "logfile" ? <LogTables logRows={logRows} currentUserRole={currentUser.role} onMaterialClick={handleMaterialClick} onDrumClick={handleDrumClick} onUpdateTransaction={handleUpdateTransaction} onSoftDeleteTransaction={handleSoftDeleteTransaction} onApproveTransaction={handleApproveTransaction} onRejectTransaction={handleRejectTransaction} /> : null}
             {activeView === "leftovers" ? <Leftovers leftoverRows={leftoverRows} onMaterialClick={handleMaterialClick} /> : null}
             {activeView === "sites" ? <SiteTracker sites={sites} onRefresh={loadData} /> : null}
-            {activeView === "site_summary" ? <SiteSummaryOutbound logRows={logRows} leftoverRows={leftoverRows} /> : null}
             {activeView === "drum_history" && selectedDrumNumber ? (
               <DrumHistory drumNumber={selectedDrumNumber} logRows={logRows} leftoverRows={leftoverRows} onBack={() => setActiveView("dashboard")} />
+            ) : null}
+            {activeView === "drum_summary" ? (
+              <DrumSummary logRows={logRows} leftoverRows={leftoverRows} onDrumClick={handleDrumClick} />
             ) : null}
             {activeView === "delivery_orders" ? <DeliveryOrders orders={deliveryOrders} master={master} logRows={logRows} onRefresh={loadData} /> : null}
             {activeView === "material" ? <MasterMaterial materials={materials} onMaterialClick={handleMaterialClick} onRefresh={loadData} /> : null}
@@ -361,7 +647,20 @@ function App() {
           </div>
         </main>
       </div>
+      {idleWarning && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 9999
+        }}>
+          <div style={{ background: 'white', padding: 24, borderRadius: 12, maxWidth: 400, textAlign: 'center' }}>
+            <h3 style={{ marginTop: 0 }}>Sesi Akan Berakhir</h3>
+            <p style={{ color: 'var(--text2)' }}>Anda akan otomatis logout dalam 2 menit karena tidak ada aktivitas.</p>
+            <button type="button" className="btn btn-primary" onClick={() => setIdleWarning(false)}>Tetap Masuk</button>
+          </div>
+        </div>
+      )}
     </div>
+    </ErrorBoundary>
   );
 }
 

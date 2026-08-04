@@ -1,9 +1,10 @@
-import { ArrowLeft, Download } from "lucide-react";
-import { useMemo } from "react";
+import { ArrowLeft, Download, QrCode } from "lucide-react";
+import { useMemo, useState } from "react";
 import type { TransactionRecord } from "../types";
 import { formatNumber } from "../lib/wims";
 import { useSortableData } from "../hooks/useSortableData";
 import { SortableHeader } from "./SortableHeader";
+import { QrDisplay } from "./QrDisplay";
 
 interface MaterialHistoryProps {
   materialName: string;
@@ -14,6 +15,7 @@ interface MaterialHistoryProps {
 }
 
 export function MaterialHistory({ materialName, logRows, leftoverRows, onDrumClick, onBack }: MaterialHistoryProps) {
+  const [showQr, setShowQr] = useState(false);
   // Combine all history related to this material
   const historyRows = useMemo(() => {
     const logs = logRows.filter((r) => r.materialName === materialName);
@@ -74,9 +76,14 @@ export function MaterialHistory({ materialName, logRows, leftoverRows, onDrumCli
             </button>
             <span className="card-title">History: <b>{materialName}</b></span>
           </div>
-          <button className="btn btn-sm" onClick={handleExportCsv}>
-            <Download size={14} style={{ marginRight: 6 }} /> Export CSV
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-sm" onClick={() => setShowQr(true)}>
+              <QrCode size={14} style={{ marginRight: 6 }} /> QR
+            </button>
+            <button className="btn btn-sm" onClick={handleExportCsv}>
+              <Download size={14} style={{ marginRight: 6 }} /> Export CSV
+            </button>
+          </div>
         </div>
         
         <div className="table-wrap" style={{ marginTop: 16 }}>
@@ -151,6 +158,20 @@ export function MaterialHistory({ materialName, logRows, leftoverRows, onDrumCli
           </table>
         </div>
       </div>
+
+      {showQr && (
+        <div className="modal-backdrop" onClick={() => setShowQr(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360, textAlign: "center" }}>
+            <div className="modal-header" style={{ justifyContent: "space-between" }}>
+              <h3 style={{ margin: 0, fontSize: 16 }}>QR Code Material</h3>
+              <button className="btn-icon" onClick={() => setShowQr(false)}><ArrowLeft size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ display: "flex", justifyContent: "center", padding: 24 }}>
+              <QrDisplay value={materialName} title={materialName} size={180} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

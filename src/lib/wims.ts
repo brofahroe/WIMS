@@ -13,6 +13,7 @@ import type {
 
 export const POSITIVE_TYPES = new Set(["INBOUND", "BORROW IN", "TRANSFER IN"]);
 export const NEGATIVE_TYPES = new Set(["OUTBOUND", "BORROW OUT", "TRANSFER OUT"]);
+export const APPROVAL_THRESHOLD_QTY = 5000;
 
 export const PREFIX_BY_TYPE: Record<string, string> = {
   "BORROW IN": "BOI",
@@ -133,19 +134,27 @@ export function getAvailableReels(
         drumNumber: reelId,
         taggingType: row.taggingType,
         remaining: 0,
-        date: row.date || "",
+        // Bug #10 fix: initialize date only on first inbound so FIFO tracks
+        // the *earliest* inbound date correctly.
+        date: sign > 0 ? (row.date || "") : "",
       };
+    } else if (sign > 0 && row.date) {
+      // Bug #10 fix: keep the EARLIEST inbound date (was keeping latest due to
+      // reversed comparison — old code updated when row.date < existing date,
+      // which overwrites with a smaller/earlier value only on subsequent hits,
+      // but skipped the very first assignment to a non-empty string entirely
+      // when the initial value was already set).  Now we always track minimum.
+      if (!balances[reelId].date || row.date < balances[reelId].date) {
+        balances[reelId].date = row.date;
+      }
     }
+
     balances[reelId].remaining += sign * qty;
-    
-    if (sign > 0 && (!balances[reelId].date || (row.date && row.date < balances[reelId].date))) {
-      balances[reelId].date = row.date || "";
-    }
   }
 
   return Object.values(balances)
     .filter(b => b.remaining > 0)
-    .sort((a, b) => a.date.localeCompare(b.date)); // FIFO
+    .sort((a, b) => a.date.localeCompare(b.date)); // FIFO: earliest inbound first
 }
 
 export function calculateInventory(
@@ -199,11 +208,18 @@ export function generateNotaNo(type: string, whGci: string, warehouses: Warehous
   const yy = String(dateObj.getFullYear()).slice(-2);
   const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
   const stem = `${prefix}-${whId}${yy}${mm}-`;
+
+  // Bug #3 fix: only consider rows whose nota number belongs to the same
+  // prefix+warehouse+year+month stem. Previously, rows from a different month
+  // with a coincidentally matching prefix could inflate the sequence counter.
   const next = rows.reduce((max, row) => {
     const nota = normalizeText(row.notaNo);
     if (!nota.startsWith(stem)) return max;
-    const tail = Number(nota.slice(stem.length));
-    return Number.isFinite(tail) ? Math.max(max, tail) : max;
+    // The tail must be purely numeric (no extra characters)
+    const tail = nota.slice(stem.length);
+    if (!/^\d+$/.test(tail)) return max;
+    const num = Number(tail);
+    return Number.isFinite(num) ? Math.max(max, num) : max;
   }, 0);
   return `${stem}${String(next + 1).padStart(3, "0")}`;
 }
@@ -306,6 +322,7 @@ export function processTempRows(
   const newRows: TransactionRecord[] = [];
 
   for (const row of tempRows) {
+    const needsApproval = Number(row.qty) > APPROVAL_THRESHOLD_QTY;
     if (row.taggingType === "LEFTOVERS") {
       leftoverIndex += 1;
       const prefix =
@@ -313,12 +330,15 @@ export function processTempRows(
         "LO";
       const newRow = {
         ...row,
-        id: `leftovers-new-${Date.now()}-${leftoverIndex}`,
+        // Bug #2 fix: use crypto.randomUUID() instead of Date.now() so IDs are
+        // guaranteed unique even when multiple rows are processed synchronously.
+        id: crypto.randomUUID(),
         source: "leftovers" as const,
         rowId: formatRowId(leftoverIndex),
         tagId: row.tagId ?? `${prefix}-${formatRowId(leftoverIndex)}-${formatNumber(row.qty)}${row.unit === "Meter" ? "m" : ""}`,
         inOutQty: movementSign(row.transactionType),
         loCriteria: row.unit === "Meter" ? classifyLeftover(row.qty) : null,
+        approvalStatus: (needsApproval ? "PENDING" : "APPROVED") as "PENDING" | "APPROVED",
       };
       nextLeftoverRows.push(newRow);
       newRows.push(newRow);
@@ -326,16 +346,18 @@ export function processTempRows(
       logIndex += 1;
       const newRow = {
         ...row,
-        id: `logfile-new-${Date.now()}-${logIndex}`,
+        // Bug #2 fix: use crypto.randomUUID() instead of Date.now()
+        id: crypto.randomUUID(),
         source: "logfile" as const,
         rowId: formatRowId(logIndex),
+        approvalStatus: (needsApproval ? "PENDING" : "APPROVED") as "PENDING" | "APPROVED",
       };
       nextLogRows.push(newRow);
       newRows.push(newRow);
     }
 
     events.push({
-      id: `event-${Date.now()}-${events.length}`,
+      id: crypto.randomUUID(),
       at: now,
       user: "Admin WH",
       action: "PROCESS",
@@ -400,4 +422,24 @@ export function saveStorage<T>(key: string, value: T): void {
   } catch {
     // Storage is a convenience layer; the UI should continue even when it is full or disabled.
   }
+}
+
+export function createAuditTrail(options: {
+  action: string;
+  tableName: string;
+  recordId?: string | null;
+  oldValues?: Record<string, unknown> | null;
+  newValues?: Record<string, unknown> | null;
+  performedBy?: string | null;
+}): import("../types").AuditTrail {
+  return {
+    id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    action: options.action,
+    tableName: options.tableName,
+    recordId: options.recordId ?? null,
+    oldValues: options.oldValues ?? null,
+    newValues: options.newValues ?? null,
+    performedBy: options.performedBy ?? null,
+    performedAt: new Date().toISOString(),
+  };
 }

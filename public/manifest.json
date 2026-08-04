@@ -1,0 +1,17 @@
+{
+  "name": "WIMS v3",
+  "short_name": "WIMS",
+  "description": "Warehouse Inventory Monitoring System",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
