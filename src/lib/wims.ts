@@ -31,6 +31,18 @@ export function normalizeText(value: unknown): string {
     .trim();
 }
 
+export function safeString(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+export function safeReplace(value: unknown, pattern: string | RegExp, replacement: string): string {
+  return safeString(value).replace(pattern, replacement);
+}
+
 export function normalizeType(value: unknown): string {
   return normalizeText(value).toUpperCase();
 }

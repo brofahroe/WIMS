@@ -1,7 +1,7 @@
 import { ArrowLeft, Download, QrCode } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { TransactionRecord } from "../types";
-import { formatNumber } from "../lib/wims";
+import { safeReplace, formatNumber } from "../lib/wims";
 import { useSortableData } from "../hooks/useSortableData";
 import { SortableHeader } from "./SortableHeader";
 import { QrDisplay } from "./QrDisplay";
@@ -81,7 +81,7 @@ export function DrumHistory({ drumNumber, logRows, leftoverRows, onBack }: DrumH
       `"${row.materialName || ""}"`,
       `"${row.qty || 0}"`,
       `"${row.unit || ""}"`,
-      `"${(row.remarks || "").replace(/\n/g, " ")}"`
+      `"${safeReplace(row.remarks, /\n/g, " ")}"`
     ]);
 
     const csvContent = "\uFEFF" + [headers.join(","), ...csvRows.map((e) => e.join(","))].join("\n");

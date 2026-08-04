@@ -1,7 +1,7 @@
 import { Download, Edit2, Printer, Save, X } from "lucide-react";
 import { useState } from "react";
 import type { TransactionRecord } from "../types";
-import { formatNumber } from "../lib/wims";
+import { formatNumber, safeReplace } from "../lib/wims";
 import { ReceiptModal } from "./ReceiptModal";
 
 interface NotaDetailModalProps {
@@ -62,7 +62,7 @@ export function NotaDetailModal({ notaNo, rows, onClose, onUpdateTransaction }: 
       `"${r.siteName || ""}"`,
       `"${r.condition || ""}"`,
       `"${r.drumNumber || r.tagId || ""}"`,
-      `"${(r.remarks || "").replace(/\n/g, " ")}"`
+      `"${safeReplace(r.remarks, /\n/g, " ")}"`
     ]);
     const csvContent = "\uFEFF" + [headers.join(","), ...csvRows.map(e => e.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });

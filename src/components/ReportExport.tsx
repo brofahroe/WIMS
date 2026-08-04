@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from "recharts";
 import type { InventoryRow, MaterialItem, SiteItem, TransactionRecord } from "../types";
 import { buildTransactionExport, sendToWebhook } from "../lib/integration";
+import { safeReplace } from "../lib/wims";
 
 interface ReportExportProps {
   logRows: TransactionRecord[];
@@ -80,7 +81,7 @@ export function ReportExport({ logRows, inventory, sites, materials, onImport }:
       `"${r.id}"`, `"${r.transactionType || ""}"`, `"${r.notaNo || ""}"`, `"${r.date?.split(" ")[0]?.split("T")[0] || ""}"`, `"${r.whGci || ""}"`,
       `"${r.materialName || ""}"`, `"${r.materialCode || ""}"`, `"${r.qty || 0}"`, `"${r.unit || ""}"`, `"${r.drumNumber || ""}"`,
       `"${r.siteId || ""}"`, `"${r.siteName || ""}"`, `"${r.doNumber || ""}"`, `"${r.dnNumber || ""}"`,
-      `"${r.condition || ""}"`, `"${r.taggingType || ""}"`, `"${r.picDelivery || ""}"`, `"${r.vendorSupplier || ""}"`, `"${(r.remarks || "").replace(/\n/g, " ")}"`
+      `"${r.condition || ""}"`, `"${r.taggingType || ""}"`, `"${r.picDelivery || ""}"`, `"${r.vendorSupplier || ""}"`, `"${safeReplace(r.remarks, /\n/g, " ")}"`
     ]);
     exportCSV("WIMS_Logfile.csv", headers, rows);
   };

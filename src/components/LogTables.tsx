@@ -1,7 +1,7 @@
 import { Download, Search, Edit2, Trash2, Image, Save, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { TransactionRecord, UserRole } from "../types";
-import { formatNumber, normalizeText } from "../lib/wims";
+import { formatNumber, normalizeText, safeReplace } from "../lib/wims";
 import { useSortableData } from "../hooks/useSortableData";
 import { SortableHeader } from "./SortableHeader";
 import { Modal } from "./ui/Modal";
@@ -97,7 +97,7 @@ export function LogTables({ logRows, currentUserRole, onMaterialClick, onDrumCli
       `"${r.condition || ""}"`,
       `"${r.picDelivery || ""}"`,
       `"${r.vendorSupplier || ""}"`,
-      `"${(r.remarks || "").replace(/\n/g, " ")}"`
+      `"${safeReplace(r.remarks, /\n/g, " ")}"`
     ]);
     const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
