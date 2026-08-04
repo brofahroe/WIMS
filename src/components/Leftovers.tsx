@@ -52,10 +52,10 @@ export function Leftovers({ leftoverRows, onMaterialClick }: LeftoversProps) {
   const { items: sortedLeftovers, requestSort, sortConfig } = useSortableData(filteredRows, { key: "date", direction: "descending" });
 
   const handleExportCsv = () => {
-    const headers = ["Tag ID", "Tipe", "Nota No", "Tanggal", "Material", "Qty", "Unit", "Site ID", "Cable Marker", "PIC"];
+    const headers = ["Tag ID", "Tipe", "Nota No", "Tanggal", "Material", "Qty", "Unit", "Site ID", "Site Name", "Haspel/Drum", "Kriteria", "PIC"];
     const csvContent = [
       headers.join(","),
-      ...sortedLeftovers.map(r => [r.tagId, r.transactionType, r.notaNo, r.date?.split(" ")[0]?.split("T")[0], r.materialName, r.qty, r.unit, r.siteId, r.cableLengthMarker, r.picDelivery].join(","))
+      ...sortedLeftovers.map(r => [r.tagId, r.transactionType, r.notaNo, r.date?.split(" ")[0]?.split("T")[0], r.materialName, r.qty, r.unit, r.siteId, r.siteName, r.drumNumber, r.loCriteria || "-", r.picDelivery].join(","))
     ].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
@@ -194,7 +194,8 @@ export function Leftovers({ leftoverRows, onMaterialClick }: LeftoversProps) {
                 <SortableHeader label="Qty" sortKey="qty" currentSort={sortConfig} requestSort={requestSort} align="right" />
                 <SortableHeader label="Unit" sortKey="unit" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Site ID" sortKey="siteId" currentSort={sortConfig} requestSort={requestSort} />
-                <SortableHeader label="Cable Marker" sortKey="cableLengthMarker" currentSort={sortConfig} requestSort={requestSort} />
+                <SortableHeader label="Site Name" sortKey="siteName" currentSort={sortConfig} requestSort={requestSort} />
+                <SortableHeader label="Haspel/Drum" sortKey="drumNumber" currentSort={sortConfig} requestSort={requestSort} />
                 <th>Kriteria</th>
                 <SortableHeader label="PIC" sortKey="picDelivery" currentSort={sortConfig} requestSort={requestSort} />
               </tr>
@@ -230,7 +231,8 @@ export function Leftovers({ leftoverRows, onMaterialClick }: LeftoversProps) {
                     <td className="mono"><b>{formatNumber(r.qty)}</b></td>
                     <td>{r.unit}</td>
                     <td>{r.siteId || "-"}</td>
-                    <td>{r.cableLengthMarker || "-"}</td>
+                    <td>{r.siteName || "-"}</td>
+                    <td>{r.drumNumber || "-"}</td>
                     <td>{getCriteriaBadge(r.qty)}</td>
                     <td>{r.picDelivery || "-"}</td>
                   </tr>
@@ -238,7 +240,7 @@ export function Leftovers({ leftoverRows, onMaterialClick }: LeftoversProps) {
               })}
               {leftoverRows.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="empty-state" style={{ textAlign: "center", padding: 24, color: "var(--text3)" }}>
+                  <td colSpan={13} className="empty-state" style={{ textAlign: "center", padding: 24, color: "var(--text3)" }}>
                     Tidak ada data leftovers
                   </td>
                 </tr>
