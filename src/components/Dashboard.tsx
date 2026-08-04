@@ -158,11 +158,10 @@ export function Dashboard({ inventory, logRows, leftoverRows, onMaterialClick }:
             <div className="table-scroll">
               <table>
               <thead>
-                <tr>
-                  <th>Material</th>
-                  <th>Kode</th>
-                  <th>Unit</th>
-                  <th>Stok WH</th>
+                 <tr>
+                   <th>Material</th>
+                   <th>Unit</th>
+                   <th>Stok WH</th>
                   <th>Sisa LO</th>
                   <th>Status</th>
                 </tr>
@@ -170,16 +169,15 @@ export function Dashboard({ inventory, logRows, leftoverRows, onMaterialClick }:
               <tbody>
                 {criticalStock.map((item) => (
                   <tr key={item.materialCode}>
-                    <td>
-                      <span 
-                        style={{ cursor: "pointer", color: "var(--blue)", textDecoration: "underline" }} 
-                        onClick={() => onMaterialClick && onMaterialClick(item.materialName || "")}
-                      >
-                        {item.materialName}
-                      </span>
-                    </td>
-                    <td className="mono">{item.materialCode}</td>
-                    <td>{item.unit}</td>
+                     <td>
+                       <span 
+                         style={{ cursor: "pointer", color: "var(--blue)", textDecoration: "underline" }} 
+                         onClick={() => onMaterialClick && onMaterialClick(item.materialName || "")}
+                       >
+                         {item.materialName}
+                       </span>
+                     </td>
+                     <td>{item.unit}</td>
                     <td className={item.stockWhCalc <= 0 ? "stock-low" : "stock-warn"}>{formatNumber(item.stockWhCalc)}</td>
                     <td style={{ color: "var(--orange)", fontWeight: 500 }}>{formatNumber(item.leftoversStockCalc)}</td>
                     <td>
@@ -194,7 +192,7 @@ export function Dashboard({ inventory, logRows, leftoverRows, onMaterialClick }:
                   </tr>
                 ))}
                 {criticalStock.length === 0 && (
-                  <tr><td colSpan={6} style={{ textAlign: "center", padding: 20, color: "var(--text3)" }}>Aman, tidak ada stok kritis.</td></tr>
+                  <tr><td colSpan={5} style={{ textAlign: "center", padding: 20, color: "var(--text3)" }}>Aman, tidak ada stok kritis.</td></tr>
                 )}
               </tbody>
             </table>
@@ -209,7 +207,7 @@ export function Dashboard({ inventory, logRows, leftoverRows, onMaterialClick }:
                 <thead>
                   <tr>
                     <th>Material</th>
-                    <th>Kode</th>
+                    <th>Material</th>
                     <th>Unit</th>
                     <th>Stok WH</th>
                     <th>Threshold</th>
@@ -230,7 +228,6 @@ export function Dashboard({ inventory, logRows, leftoverRows, onMaterialClick }:
                             {item.materialName}
                           </span>
                         </td>
-                        <td className="mono">{item.materialCode}</td>
                         <td>{item.unit}</td>
                         <td className={item.stockWhCalc <= 0 ? "stock-low" : "stock-warn"}>{formatNumber(item.stockWhCalc)}</td>
                         <td>{threshold}</td>
@@ -241,7 +238,7 @@ export function Dashboard({ inventory, logRows, leftoverRows, onMaterialClick }:
                     );
                   })}
                   {reorderAlerts.length === 0 && (
-                    <tr><td colSpan={6} style={{ textAlign: "center", padding: 20, color: "var(--text3)" }}>Tidak ada material yang perlu di-reorder.</td></tr>
+                    <tr><td colSpan={5} style={{ textAlign: "center", padding: 20, color: "var(--text3)" }}>Tidak ada material yang perlu di-reorder.</td></tr>
                   )}
                 </tbody>
               </table>

@@ -89,7 +89,7 @@ export function MasterMaterial({ materials, onMaterialClick, onRefresh }: Master
       alert("Gagal menyimpan data: " + error.message);
     } else {
       setIsModalOpen(false);
-      onRefresh && onRefresh();
+      if (onRefresh) onRefresh();
     }
   };
 
@@ -101,7 +101,7 @@ export function MasterMaterial({ materials, onMaterialClick, onRefresh }: Master
     if (error) {
       alert("Gagal menghapus data: " + error.message);
     } else {
-      onRefresh && onRefresh();
+      if (onRefresh) onRefresh();
     }
   };
 
@@ -146,7 +146,6 @@ export function MasterMaterial({ materials, onMaterialClick, onRefresh }: Master
           <table id="mat-table">
             <thead>
               <tr>
-                <SortableHeader label="Kode" sortKey="materialCode" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Nama Material" sortKey="materialName" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Tipe Material" sortKey="typeMaterial" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Sumber" sortKey="sourceMaterial" currentSort={sortConfig} requestSort={requestSort} />
@@ -156,9 +155,8 @@ export function MasterMaterial({ materials, onMaterialClick, onRefresh }: Master
             </thead>
             <tbody>
               {sortedMaterials.map((item) => (
-                <tr key={item.materialCode}>
-                  <td className="mono">{item.materialCode}</td>
-                  <td>
+                 <tr key={item.materialCode}>
+                   <td>
                     <span 
                       style={{ cursor: "pointer", color: "var(--blue)", textDecoration: "underline" }} 
                       onClick={() => onMaterialClick && onMaterialClick(item.materialName || "")}
@@ -181,7 +179,7 @@ export function MasterMaterial({ materials, onMaterialClick, onRefresh }: Master
               ))}
               {filteredMaterials.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="empty-state" style={{ textAlign: "center", padding: 24, color: "var(--text3)" }}>
+                  <td colSpan={5} className="empty-state" style={{ textAlign: "center", padding: 24, color: "var(--text3)" }}>
                     Tidak ada material yang sesuai
                   </td>
                 </tr>

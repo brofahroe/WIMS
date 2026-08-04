@@ -15,8 +15,8 @@ interface InventorySummaryProps {
 
 export function InventorySummary({
   inventory,
-  warehouseFilter,
-  onWarehouseFilterChange,
+  warehouseFilter: _warehouseFilter,
+  onWarehouseFilterChange: _onWarehouseFilterChange,
   onMaterialClick,
 }: InventorySummaryProps) {
   const [query, setQuery] = useState("");
@@ -115,7 +115,6 @@ export function InventorySummary({
           <table id="stok-table">
             <thead>
               <tr>
-                <SortableHeader label="Kode" sortKey="materialCode" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Nama Material" sortKey="materialName" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Tipe" sortKey="typeMaterial" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Unit" sortKey="unit" currentSort={sortConfig} requestSort={requestSort} />
@@ -133,10 +132,9 @@ export function InventorySummary({
             <tbody>
               {sortedItems.map((row) => (
                 <tr key={`${row.materialCode}-${row.materialName}`}>
-                  <td className="mono">{row.materialCode}</td>
-                  <td>
-                    <span 
-                      style={{ cursor: "pointer", color: "var(--blue)", textDecoration: "underline" }} 
+                 <td>
+                     <span 
+                       style={{ cursor: "pointer", color: "var(--blue)", textDecoration: "underline" }}
                       onClick={() => onMaterialClick && onMaterialClick(row.materialName || "")}
                     >
                       {row.materialName}
@@ -163,7 +161,7 @@ export function InventorySummary({
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="empty-state" style={{ textAlign: "center", padding: 24, color: "var(--text3)" }}>
+                  <td colSpan={12} className="empty-state" style={{ textAlign: "center", padding: 24, color: "var(--text3)" }}>
                     Tidak ada data stok yang sesuai
                   </td>
                 </tr>

@@ -158,7 +158,6 @@ export function LogTables({ logRows, currentUserRole, onMaterialClick, onDrumCli
                 <SortableHeader label="Tanggal" sortKey="date" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Source/Dest" sortKey="source" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Material" sortKey="materialName" currentSort={sortConfig} requestSort={requestSort} />
-                <SortableHeader label="Kode" sortKey="materialCode" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Qty" sortKey="qty" currentSort={sortConfig} requestSort={requestSort} align="right" />
                 <SortableHeader label="Unit" sortKey="unit" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Haspel/Drum" sortKey="drumNumber" currentSort={sortConfig} requestSort={requestSort} />
@@ -209,7 +208,6 @@ export function LogTables({ logRows, currentUserRole, onMaterialClick, onDrumCli
                       {row.materialName}
                     </b>
                   </td>
-                  <td className="mono">{row.materialCode}</td>
                   <td className="numeric"><b>{formatNumber(row.qty)}</b></td>
                   <td>{row.unit}</td>
                   <td style={{ fontSize: 12, color: "var(--blue)" }}>
@@ -274,7 +272,7 @@ export function LogTables({ logRows, currentUserRole, onMaterialClick, onDrumCli
               ))}
               {filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={19} className="empty-state" style={{ textAlign: "center", padding: 24, color: "var(--text3)" }}>
+                  <td colSpan={18} className="empty-state" style={{ textAlign: "center", padding: 24, color: "var(--text3)" }}>
                     Tidak ada transaksi yang sesuai
                   </td>
                 </tr>

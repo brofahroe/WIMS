@@ -95,7 +95,6 @@ export function MaterialHistory({ materialName, logRows, leftoverRows, onDrumCli
                 <SortableHeader label="WH" sortKey="whGci" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Tanggal" sortKey="date" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Source/Dest" sortKey="sourceDestination" currentSort={sortConfig} requestSort={requestSort} />
-                <SortableHeader label="Kode" sortKey="materialCode" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Qty" sortKey="qty" currentSort={sortConfig} requestSort={requestSort} align="right" />
                 <SortableHeader label="Unit" sortKey="unit" currentSort={sortConfig} requestSort={requestSort} />
                 <SortableHeader label="Site ID" sortKey="siteId" currentSort={sortConfig} requestSort={requestSort} />
@@ -117,7 +116,6 @@ export function MaterialHistory({ materialName, logRows, leftoverRows, onDrumCli
                   <td style={{ color: "var(--blue)" }}>{row.whGci}</td>
                   <td>{row.date?.split(" ")[0]?.split("T")[0]}</td>
                   <td>{row.sourceDestination || "-"}</td>
-                  <td className="mono">{row.materialCode}</td>
                   <td className="numeric"><b>{formatNumber(row.qty)}</b></td>
                   <td>{row.unit}</td>
                   <td>{row.siteId || "-"}</td>
@@ -149,7 +147,7 @@ export function MaterialHistory({ materialName, logRows, leftoverRows, onDrumCli
               ))}
               {sortedRows.length === 0 && (
                 <tr>
-                  <td colSpan={isCable ? 13 : 11} className="empty-state" style={{ textAlign: "center", padding: 24, color: "var(--text3)" }}>
+                  <td colSpan={isCable ? 12 : 10} className="empty-state" style={{ textAlign: "center", padding: 24, color: "var(--text3)" }}>
                     Tidak ada history untuk material ini.
                   </td>
                 </tr>
