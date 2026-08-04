@@ -263,14 +263,31 @@ function App() {
   useEffect(() => { saveStorage(STORAGE_KEYS.tempRows, tempRows); }, [tempRows]);
   useEffect(() => { saveStorage(STORAGE_KEYS.events, events); }, [events]);
 
-  const resetLocalData = () => {
-    if (!window.confirm("Yakin ingin reset database ke posisi awal (data dari Excel)? Semua input manual akan hilang.")) return;
-    setLogRows(seedData.logRows);
-    setLeftoverRows(seedData.leftoverRows);
-    setDeliveryOrders(seedData.deliveryOrders);
+  const resetLocalData = async () => {
+    if (!window.confirm("Yakin ingin reset database? Semua data akan dikosongkan dan diisi ulang dari sumber (Excel/Supabase).")) return;
+    
+    setLogRows([]);
+    setLeftoverRows([]);
+    setDeliveryOrders([]);
     setTempRows([]);
-    setEvents(buildRecentEvents([...seedData.logRows, ...seedData.leftoverRows]));
-    alert("Database berhasil di-reset!");
+    setMaterials([]);
+    setEvents([]);
+    
+    const cacheKeys = Object.keys(window.localStorage).filter(
+      (k) => k.startsWith("wims-cache-") || k.startsWith("wims-web-")
+    );
+    cacheKeys.forEach((k) => window.localStorage.removeItem(k));
+    
+    if (isSupabaseEnabled) {
+      await loadData();
+      alert("Database berhasil di-reset! Data di-fetch ulang dari Supabase.");
+    } else {
+      setLogRows(seedData.logRows);
+      setLeftoverRows(seedData.leftoverRows);
+      setDeliveryOrders(seedData.deliveryOrders);
+      setEvents(buildRecentEvents([...seedData.logRows, ...seedData.leftoverRows]));
+      alert("Database berhasil di-reset ke data awal!");
+    }
   };
 
   const handleMaterialClick = useCallback((materialName: string) => {
