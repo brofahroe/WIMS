@@ -96,8 +96,8 @@ function processLOLogfile(sheet) {
       remarks: row[24] || null,
       taggingManual: row[25] || null,
       cableLengthMarker: row[26] || null,
-      drumNumber: row[27] ? String(row[27]) : null,
-      cableRoll: row[27] ? String(row[27]) : null,
+      drumNumber: row[25] ? String(row[25]) : null,
+      cableRoll: row[25] ? String(row[25]) : null,
       taggingType: "LEFTOVERS"
     };
     records.push(record);
