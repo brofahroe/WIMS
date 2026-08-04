@@ -10,16 +10,87 @@ dotenv.config();
 const EXCEL_FILE = "WIMS V1_GCI-EJ-EMR-MALANG.xlsm";
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || "";
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error("VITE_SUPABASE_URL atau VITE_SUPABASE_ANON_KEY tidak ditemukan di .env");
+  console.error("VITE_SUPABASE_URL atau SUPABASE_SERVICE_ROLE_KEY/VITE_SUPABASE_ANON_KEY tidak ditemukan di .env");
   process.exit(1);
 }
 
+// If you don't have SUPABASE_SERVICE_ROLE_KEY in .env, the script will use
+// SECURITY DEFINER functions from supabase_import_function.sql. Run that SQL
+// first in your Supabase SQL Editor, then re-run this script.
+
 const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: { persistSession: false },
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+  },
+  db: { schema: "public" },
+  global: { db: { schema: "public" } },
 });
+
+// If we have the service_role key, we can bypass RLS directly.
+// Otherwise, we rely on SECURITY DEFINER functions defined in supabase_import_function.sql.
+const useServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+const generateSqlMode = process.argv.includes("--sql");
+
+const deletePatterns = {
+  transactions: { col: "id", op: "neq", val: "" },
+  audit_trail: { col: "id", op: "neq", val: "" },
+  master_materials: { col: "materialName", op: "neq", val: "" },
+  warehouses: { col: "whGci", op: "neq", val: "" },
+  sites: { col: "siteId", op: "neq", val: "" },
+  delivery_orders: { col: "doNumber", op: "neq", val: "" },
+  app_settings: { col: "id", op: "eq", val: "master" },
+};
+
+async function truncateTable(table) {
+  if (useServiceRole) {
+    const pat = deletePatterns[table] || { col: "id", op: "neq", val: "" };
+    let query = supabase.from(table).delete();
+    if (pat.op === "neq") query = query.neq(pat.col, pat.val);
+    else if (pat.op === "eq") query = query.eq(pat.col, pat.val);
+    const { error } = await query;
+    if (error) throw new Error(`Error deleting from ${table}: ${error.message}`);
+  } else {
+    const { error } = await supabase.rpc("bulk_truncate", { table_name: table });
+    if (error) throw new Error(`Error truncating ${table}: ${error.message}`);
+  }
+}
+
+async function insertChunk(table, rpcFunc, chunk) {
+  if (generateSqlMode) {
+    return { error: null, count: 0, sql: generateInsertSQL(table, chunk) };
+  }
+  if (useServiceRole) {
+    const { error } = await supabase.from(table).insert(chunk);
+    return { error: error || null, count: error ? 0 : chunk.length };
+  } else {
+    const { error, data } = await supabase.rpc(rpcFunc, { rows: chunk });
+    if (error) return { error, count: 0 };
+    const parsed = typeof data === "string" ? JSON.parse(data) : data;
+    return { error: parsed?.error || null, count: parsed?.inserted || 0 };
+  }
+}
+
+function sqlEscape(val) {
+  if (val === null || val === undefined) return "NULL";
+  if (typeof val === "number") return String(val);
+  if (typeof val === "boolean") return val ? "TRUE" : "FALSE";
+  if (typeof val === "object") return "'" + JSON.stringify(val).replace(/'/g, "''") + "'::jsonb";
+  return "'" + String(val).replace(/'/g, "''") + "'";
+}
+
+function generateInsertSQL(table, rows) {
+  if (rows.length === 0) return "";
+  const cols = Object.keys(rows[0]);
+  const colList = cols.map(c => `"${c}"`).join(", ");
+  const values = rows
+    .map(row => "(" + cols.map(c => sqlEscape(row[c])).join(", ") + ")")
+    .join(",\n");
+  return `INSERT INTO public."${table}" (${colList}) VALUES\n${values};\n`;
+}
 
 function excelDateToJSDate(excelDate) {
   if (!excelDate) return null;
@@ -67,10 +138,10 @@ function processLogfile(sheet) {
       drumNumber: row[24] ? String(row[24]) : null,
       taggingType: "LOGFILE",
       source: "logfile",
-      approvalStatus: "APPROVED",
-      approvedBy: null,
-      approvedAt: null,
-      deletedAt: null,
+      approval_status: "APPROVED",
+      approved_by: null,
+      approved_at: null,
+      deleted_at: null,
     });
   }
   return records;
@@ -118,10 +189,10 @@ function processLOLogfile(sheet) {
       loCriteria: null,
       taggingType: "LEFTOVERS",
       source: "leftovers",
-      approvalStatus: "APPROVED",
-      approvedBy: null,
-      approvedAt: null,
-      deletedAt: null,
+      approval_status: "APPROVED",
+      approved_by: null,
+      approved_at: null,
+      deleted_at: null,
     });
   }
   return records;
@@ -219,124 +290,160 @@ async function main() {
   console.log("   - delivery_orders");
   console.log("   - app_settings");
 
-  const readline = await import("readline");
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
+  if (generateSqlMode) {
+    console.log("\n(SQL mode: no confirmation needed)");
+  } else {
+    const readline = await import("readline");
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
 
-  const answer = await new Promise((resolve) => {
-    rl.question("\nLanjutkan? (y/N): ", resolve);
-  });
-  rl.close();
+    const answer = await new Promise((resolve) => {
+      rl.question("\nLanjutkan? (y/N): ", resolve);
+    });
+    rl.close();
 
-  if (answer.toLowerCase() !== "y") {
-    console.log("Import dibatalkan.");
-    process.exit(0);
+    if (answer.toLowerCase() !== "y") {
+      console.log("Import dibatalkan.");
+      process.exit(0);
+    }
   }
 
-  console.log("\n🗑️  Menghapus data lama di Supabase...");
+  console.log("\n🗑️  Menghapus data lama...");
 
-  const { error: delTxError } = await supabase.from("transactions").delete().neq("id", "");
-  if (delTxError) console.error("Error deleting transactions:", delTxError.message);
-  else console.log("  ✓ Transactions dibersihkan");
+  let sqlOutput = "";
+  if (generateSqlMode) {
+    sqlOutput += "-- Generated by importToSupabase.js --sql mode\n";
+    sqlOutput += "-- Run this file in Supabase SQL Editor\n\n";
+  }
 
-  const { error: delAuditError } = await supabase.from("audit_trail").delete().neq("id", "");
-  if (delAuditError) console.error("Error deleting audit_trail:", delAuditError.message);
-  else console.log("  ✓ Audit trail dibersihkan");
+  const tables = ["transactions", "audit_trail", "master_materials", "warehouses", "sites", "delivery_orders", "app_settings"];
+  for (const table of tables) {
+    if (generateSqlMode) {
+      const pat = deletePatterns[table] || { col: "id", op: "neq", val: "" };
+      if (pat.op === "neq") sqlOutput += `DELETE FROM public."${table}" WHERE "${pat.col}" <> '${pat.val}';\n`;
+      else sqlOutput += `DELETE FROM public."${table}" WHERE "${pat.col}" = '${pat.val}';\n`;
+      console.log(`  ✓ ${table} DELETE generated`);
+    } else {
+      try {
+        await truncateTable(table);
+        console.log(`  ✓ ${table} dibersihkan`);
+      } catch (e) {
+        console.error(`  ✗ Error cleaning ${table}:`, e.message);
+      }
+    }
+  }
 
-  const { error: delMatError } = await supabase.from("master_materials").delete().neq("materialName", "");
-  if (delMatError) console.error("Error deleting master_materials:", delMatError.message);
-  else console.log("  ✓ Master materials dibersihkan");
+  if (generateSqlMode) {
+    sqlOutput += "\n";
+  }
 
-  const { error: delWhError } = await supabase.from("warehouses").delete().neq("whGci", "");
-  if (delWhError) console.error("Error deleting warehouses:", delWhError.message);
-  else console.log("  ✓ Warehouses dibersihkan");
-
-  const { error: delSiteError } = await supabase.from("sites").delete().neq("siteId", "");
-  if (delSiteError) console.error("Error deleting sites:", delSiteError.message);
-  else console.log("  ✓ Sites dibersihkan");
-
-  const { error: delDoError } = await supabase.from("delivery_orders").delete().neq("doNumber", "");
-  if (delDoError) console.error("Error deleting delivery_orders:", delDoError.message);
-  else console.log("  ✓ Delivery orders dibersihkan");
-
-  const { error: delSettingsError } = await supabase.from("app_settings").delete().eq("id", "master");
-  if (delSettingsError) console.error("Error deleting app_settings:", delSettingsError.message);
-  else console.log("  ✓ App settings dibersihkan");
-
-  console.log("\n📥 Import data ke Supabase...");
+  console.log("\n📥 Memproses data untuk import...");
 
   const allTransactions = [...logRows, ...leftoverRows];
   let inserted = 0;
   for (const chunk of chunkArray(allTransactions, 500)) {
-    const { error } = await supabase.from("transactions").insert(chunk);
-    if (error) {
-      console.error("Error inserting transactions (chunk):", error.message);
-    } else {
+    const result = await insertChunk("transactions", "bulk_insert_transactions", chunk);
+    if (generateSqlMode) {
+      sqlOutput += result.sql + "\n";
       inserted += chunk.length;
+    } else if (result.error) {
+      console.error("Error inserting transactions (chunk):", result.error);
+    } else {
+      inserted += result.count;
     }
   }
-  console.log(`  ✓ Transactions: ${inserted}/${allTransactions.length} berhasil diimport`);
+  console.log(`  ✓ Transactions: ${inserted}/${allTransactions.length} siap`);
+
+  const seedJson = JSON.parse(fs.readFileSync(path.join("src", "data", "seedData.json"), "utf8"));
 
   let materialsInserted = 0;
-  const seedJson = JSON.parse(fs.readFileSync(path.join("src", "data", "seedData.json"), "utf8"));
-  const materials = seedJson.master?.masterMaterials || [];
+  const materials = seedJson.materials || seedJson.master?.materials || [];
   for (const chunk of chunkArray(materials, 500)) {
-    const { error } = await supabase.from("master_materials").insert(chunk);
-    if (error) {
-      console.error("Error inserting master_materials (chunk):", error.message);
-    } else {
+    const result = await insertChunk("master_materials", "bulk_insert_master_materials", chunk);
+    if (generateSqlMode) {
+      sqlOutput += result.sql || "";
       materialsInserted += chunk.length;
-    }
+    } else if (result.error) console.error("Error inserting master_materials (chunk):", result.error);
+    else materialsInserted += result.count;
   }
-  console.log(`  ✓ Master materials: ${materialsInserted} berhasil diimport`);
+  console.log(`  ✓ Master materials: ${materialsInserted} siap`);
 
   let whsInserted = 0;
   const warehouses = seedJson.master?.warehouses || [];
   for (const chunk of chunkArray(warehouses, 500)) {
-    const { error } = await supabase.from("warehouses").insert(chunk);
-    if (error) {
-      console.error("Error inserting warehouses (chunk):", error.message);
-    } else {
+    const result = await insertChunk("warehouses", "bulk_insert_warehouses", chunk);
+    if (generateSqlMode) {
+      sqlOutput += result.sql || "";
       whsInserted += chunk.length;
-    }
+    } else if (result.error) console.error("Error inserting warehouses (chunk):", result.error);
+    else whsInserted += result.count;
   }
-  console.log(`  ✓ Warehouses: ${whsInserted} berhasil diimport`);
+  console.log(`  ✓ Warehouses: ${whsInserted} siap`);
 
   let sitesInserted = 0;
   const sitesData = sites || seedJson.sites || [];
   for (const chunk of chunkArray(sitesData, 500)) {
-    const { error } = await supabase.from("sites").insert(chunk);
-    if (error) {
-      console.error("Error inserting sites (chunk):", error.message);
-    } else {
+    const result = await insertChunk("sites", "bulk_insert_sites", chunk);
+    if (generateSqlMode) {
+      sqlOutput += result.sql || "";
       sitesInserted += chunk.length;
-    }
+    } else if (result.error) console.error("Error inserting sites (chunk):", result.error);
+    else sitesInserted += result.count;
   }
-  console.log(`  ✓ Sites: ${sitesInserted} berhasil diimport`);
+  console.log(`  ✓ Sites: ${sitesInserted} siap`);
 
   let doInserted = 0;
   const doData = deliveryOrders.length > 0 ? deliveryOrders : seedJson.deliveryOrders || [];
   for (const chunk of chunkArray(doData, 500)) {
-    const { error } = await supabase.from("delivery_orders").insert(chunk);
-    if (error) {
-      console.error("Error inserting delivery_orders (chunk):", error.message);
-    } else {
+    const result = await insertChunk("delivery_orders", "bulk_insert_delivery_orders", chunk);
+    if (generateSqlMode) {
+      sqlOutput += result.sql || "";
       doInserted += chunk.length;
+    } else if (result.error) console.error("Error inserting delivery_orders (chunk):", result.error);
+    else doInserted += result.count;
+  }
+  console.log(`  ✓ Delivery orders: ${doInserted} siap`);
+
+  if (generateSqlMode) {
+    const settingsSql = `INSERT INTO public."app_settings" ("id", "data") VALUES ('master', '${JSON.stringify(seedJson.master).replace(/'/g, "''")}'::jsonb) ON CONFLICT ("id") DO UPDATE SET "data" = EXCLUDED."data";\n`;
+    sqlOutput += settingsSql;
+    console.log(`  ✓ App settings siap`);
+  } else if (useServiceRole) {
+    const { error: settingsError } = await supabase.from("app_settings").upsert({
+      id: "master",
+      data: seedJson.master,
+    });
+    if (settingsError) console.error("Error inserting app_settings:", settingsError.message);
+    else console.log("  ✓ App settings berhasil diimport");
+  } else {
+    const settingsSql = `INSERT INTO public."app_settings" ("id", "data") VALUES ('master', '${JSON.stringify(seedJson.master).replace(/'/g, "''")}'::jsonb) ON CONFLICT ("id") DO UPDATE SET "data" = EXCLUDED."data";\n`;
+    const { error: settingsError } = await supabase.rpc("bulk_insert_app_settings", {
+      rows: [{ id: "master", data: seedJson.master }],
+    });
+    if (settingsError) {
+      console.error("  ✗ RPC bulk_insert_app_settings failed:", settingsError.message);
+      const sqlFile = "import_app_settings.sql";
+      fs.writeFileSync(sqlFile, settingsSql);
+      console.log(`  → SQL backup written to ${sqlFile}`);
+      console.log(`  → Jalankan SQL ini di Supabase SQL Editor untuk import app_settings`);
+    } else {
+      console.log("  ✓ App settings berhasil diimport");
     }
   }
-  console.log(`  ✓ Delivery orders: ${doInserted} berhasil diimport`);
 
-  const { error: settingsError } = await supabase.from("app_settings").upsert({
-    id: "master",
-    data: seedJson.master,
-  });
-  if (settingsError) console.error("Error inserting app_settings:", settingsError.message);
-  else console.log("  ✓ App settings berhasil diimport");
-
-  console.log("\n✅ Import selesai! Data telah siap di Supabase.");
-  console.log("   Restart aplikasi dan klik 'Reset DB' untuk refresh data.");
+  if (generateSqlMode) {
+    const sqlFile = "import_data.sql";
+    fs.writeFileSync(sqlFile, sqlOutput);
+    console.log(`\n✅ SQL file generated: ${sqlFile}`);
+    console.log("   Buka Supabase SQL Editor, paste seluruh isi file ini, dan jalankan.");
+    console.log("   Ini akan otomatis DELETE semua data lama + INSERT data baru.");
+    console.log("   SQL Editor memiliki owner privileges, jadi RLS tidak akan memblokir.");
+  } else {
+    console.log("\n✅ Import selesai! Data telah siap di Supabase.");
+    console.log("   Restart aplikasi dan klik 'Reset DB' untuk refresh data.");
+  }
 }
 
 main().catch((err) => {
