@@ -638,7 +638,7 @@ function App() {
               />
             ) : null}
              {activeView === "logfile" ? <LogTables logRows={logRows} currentUserRole={currentUser.role} onMaterialClick={handleMaterialClick} onDrumClick={handleDrumClick} onUpdateTransaction={handleUpdateTransaction} onSoftDeleteTransaction={handleSoftDeleteTransaction} onApproveTransaction={handleApproveTransaction} onRejectTransaction={handleRejectTransaction} /> : null}
-            {activeView === "leftovers" ? <Leftovers leftoverRows={leftoverRows} onMaterialClick={handleMaterialClick} /> : null}
+            {activeView === "leftovers" ? <Leftovers leftoverRows={leftoverRows} onMaterialClick={handleMaterialClick} onDrumClick={handleDrumClick} /> : null}
             {activeView === "sites" ? <SiteTracker sites={sites} onRefresh={loadData} /> : null}
             {activeView === "drum_history" && selectedDrumNumber ? (
               <DrumHistory drumNumber={selectedDrumNumber} logRows={logRows} leftoverRows={leftoverRows} onBack={() => setActiveView("dashboard")} />

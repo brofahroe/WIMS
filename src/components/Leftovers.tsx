@@ -9,9 +9,10 @@ import { SortableHeader } from "./SortableHeader";
 interface LeftoversProps {
   leftoverRows: TransactionRecord[];
   onMaterialClick?: (materialName: string) => void;
+  onDrumClick?: (drumNumber: string) => void;
 }
 
-export function Leftovers({ leftoverRows, onMaterialClick }: LeftoversProps) {
+export function Leftovers({ leftoverRows, onMaterialClick, onDrumClick }: LeftoversProps) {
   const [query, setQuery] = useState("");
   const [qtyFilter, setQtyFilter] = useState("all");
   const warehouses = useMemo(() => Array.from(new Set(leftoverRows.map(r => r.whGci).filter(Boolean))), [leftoverRows]);
@@ -232,7 +233,18 @@ export function Leftovers({ leftoverRows, onMaterialClick }: LeftoversProps) {
                     <td>{r.unit}</td>
                     <td>{r.siteId || "-"}</td>
                     <td>{r.siteName || "-"}</td>
-                    <td>{r.drumNumber || "-"}</td>
+                    <td>
+                      {r.drumNumber ? (
+                        <span
+                          onClick={() => onDrumClick && onDrumClick(r.drumNumber!)}
+                          style={{ cursor: "pointer", color: "var(--blue)", textDecoration: "underline" }}
+                        >
+                          {r.drumNumber}
+                        </span>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
                     <td>{getCriteriaBadge(r.qty)}</td>
                     <td>{r.picDelivery || "-"}</td>
                   </tr>
