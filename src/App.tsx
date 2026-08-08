@@ -75,6 +75,27 @@ function App() {
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
   const [selectedDrumNumber, setSelectedDrumNumber] = useState<string | null>(null);
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(() => window.innerWidth <= 860);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth <= 860) {
+        setIsSidebarMinimized(true);
+      } else {
+        setIsSidebarMinimized(false);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (!isSidebarMinimized && window.innerWidth <= 860) {
+      document.body.classList.add("sidebar-open");
+    } else {
+      document.body.classList.remove("sidebar-open");
+    }
+    return () => document.body.classList.remove("sidebar-open");
+  }, [isSidebarMinimized]);
   const [idleWarning, setIdleWarning] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
@@ -534,10 +555,10 @@ function App() {
           <button
             type="button"
             onClick={() => setIsSidebarMinimized(!isSidebarMinimized)}
-            style={{ display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px' }}
+            style={{ display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: 0, width: 44, height: 44 }}
             title="Toggle Sidebar"
           >
-            <Menu size={20} />
+            <Menu size={24} />
           </button>
           <img src="/logo.png" alt="WIMS Logo" className="logo-icon" style={{ border: 'none', background: 'transparent', objectFit: 'contain' }} />
           <div className="logo-text">
@@ -549,8 +570,8 @@ function App() {
           <div className="user-info" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '16px' }}>
             <span className="hide-mobile" style={{ fontSize: '0.875rem', fontWeight: 600 }}>{currentUser.email}</span>
             <span className="wh-badge" style={{ background: '#0f172a', color: 'white' }}>{currentUser.role}</span>
-            <button onClick={() => supabase.auth.signOut()} title="Logout" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text2)' }}>
-               <LogOut size={16} />
+            <button onClick={() => supabase.auth.signOut()} title="Logout" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text2)', padding: 0, width: 44, height: 44, display: 'grid', placeItems: 'center' }}>
+               <LogOut size={20} />
             </button>
           </div>
 
@@ -593,6 +614,14 @@ function App() {
           )}
         </div>
       </header>
+
+      {/* Mobile sidebar backdrop */}
+      {!isSidebarMinimized && window.innerWidth <= 860 && (
+        <div
+          className="sidebar-backdrop is-visible"
+          onClick={() => setIsSidebarMinimized(true)}
+        />
+      )}
 
       <div className="app-body">
         <Sidebar activeView={activeView} onViewChange={handleViewChange} isMinimized={isSidebarMinimized} role={currentUser.role} />

@@ -77,10 +77,11 @@ export function InventorySummary({
             placeholder="Cari kode atau nama material..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            style={{ paddingLeft: 34, width: "100%", height: 36, border: "1px solid var(--border)", borderRadius: "var(--radius)" }}
+            className="search-field"
+            style={{ paddingLeft: 34, border: "1px solid var(--border)", borderRadius: "var(--radius)" }}
           />
         </div>
-        <button className="btn" onClick={handleExportCsv} style={{ height: 36 }}>
+        <button className="btn" onClick={handleExportCsv}>
           <Download size={16} style={{ marginRight: 6 }} /> Export CSV
         </button>
       </div>

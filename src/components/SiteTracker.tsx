@@ -117,23 +117,25 @@ export function SiteTracker({ sites, onRefresh }: SiteTrackerProps) {
             placeholder="Cari Site ID, Nama, atau Team..."
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            style={{ paddingLeft: 34, width: "100%", height: 36, border: "1px solid var(--border)", borderRadius: "var(--radius)" }}
+            className="search-field"
+            style={{ paddingLeft: 34, border: "1px solid var(--border)", borderRadius: "var(--radius)" }}
           />
         </div>
         <select 
           value={msFilter} 
           onChange={(e) => setMsFilter(e.target.value)}
-          style={{ height: 36, padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--surface)" }}
+          className="input"
+          style={{ padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--surface)" }}
         >
           <option value="Semua">Semua Milestone</option>
           <option value="Approved">Approved / Progress</option>
           <option value="Done">Done / PAC</option>
           <option value="Rejected">Rejected</option>
         </select>
-        <button className="btn" onClick={handleExportCsv} style={{ height: 36 }}>
+        <button className="btn" onClick={handleExportCsv}>
           <Download size={16} style={{ marginRight: 6 }} /> Export CSV
         </button>
-        <button className="btn btn-primary" onClick={() => handleOpenModal()} style={{ height: 36 }}>
+        <button className="btn btn-primary" onClick={() => handleOpenModal()}>
           <Plus size={16} style={{ marginRight: 6 }} /> Tambah Site
         </button>
       </div>

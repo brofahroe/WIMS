@@ -81,7 +81,7 @@ export function NotaDetailModal({ notaNo, rows, onClose, onUpdateTransaction }: 
 
   return (
     <div className="modal-backdrop">
-      <div className="modal" style={{ maxWidth: 900 }}>
+      <div className="modal" style={{ maxWidth: "min(900px, 90vw)" }}>
         <div className="modal-header">
           <h3 style={{ margin: 0, fontSize: 16 }}>Detail Nota: <span className="mono">{notaNo}</span></h3>
           <button className="btn-icon" onClick={onClose}><X size={18} /></button>

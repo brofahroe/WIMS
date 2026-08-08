@@ -122,13 +122,15 @@ export function LogTables({ logRows, currentUserRole, onMaterialClick, onDrumCli
             placeholder="Cari no nota, material, atau site ID..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            style={{ paddingLeft: 34, width: "100%", height: 36, border: "1px solid var(--border)", borderRadius: "var(--radius)" }}
+            className="search-field"
+            style={{ paddingLeft: 34, border: "1px solid var(--border)", borderRadius: "var(--radius)" }}
           />
         </div>
         <select 
           value={typeFilter} 
           onChange={(e) => setTypeFilter(e.target.value)}
-          style={{ height: 36, padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--surface)" }}
+          className="input"
+          style={{ padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--surface)" }}
         >
           <option value="ALL">Semua Tipe</option>
           {types.map(t => <option key={t} value={t}>{t}</option>)}
@@ -136,12 +138,13 @@ export function LogTables({ logRows, currentUserRole, onMaterialClick, onDrumCli
         <select 
           value={whFilter} 
           onChange={(e) => setWhFilter(e.target.value)}
-          style={{ height: 36, padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--surface)" }}
+          className="input"
+          style={{ padding: "0 10px", border: "1px solid var(--border)", borderRadius: "var(--radius)", background: "var(--surface)" }}
         >
           <option value="ALL">Semua WH</option>
           {warehouses.map(w => <option key={w as string} value={w as string}>{w as string}</option>)}
         </select>
-        <button className="btn" onClick={handleExportCsv} style={{ height: 36 }}>
+        <button className="btn" onClick={handleExportCsv}>
           <Download size={16} style={{ marginRight: 6 }} /> Export CSV
         </button>
       </div>
@@ -181,22 +184,23 @@ export function LogTables({ logRows, currentUserRole, onMaterialClick, onDrumCli
                       {row.transactionType}
                     </span>
                   </td>
-                  <td className="mono">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <button className="btn-link" style={{ color: "var(--blue)", textDecoration: "underline", background: "none", border: "none", cursor: "pointer", padding: 0 }} onClick={() => setSelectedNota(row.notaNo)} title="View Detail Nota">
-                        {row.notaNo}
-                      </button>
-                      {row.proofLink && (
-                        <button
-                          onClick={() => setGalleryImages([row.proofLink!])}
-                          title="Lihat Bukti Foto"
-                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--blue)", padding: 0, display: 'flex', alignItems: 'center' }}
-                        >
-                          <Image size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+                   <td className="mono">
+                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                       <button className="btn-link" onClick={() => setSelectedNota(row.notaNo)} title="View Detail Nota">
+                         {row.notaNo}
+                       </button>
+                       {row.proofLink && (
+                         <button
+                           onClick={() => setGalleryImages([row.proofLink!])}
+                           title="Lihat Bukti Foto"
+                           className="icon-button"
+                           style={{ width: 36, height: 36 }}
+                         >
+                           <Image size={16} />
+                         </button>
+                       )}
+                     </div>
+                   </td>
                   <td style={{ color: "var(--blue)" }}>{row.whGci}</td>
                   <td>{row.date?.split(" ")[0]?.split("T")[0]}</td>
                   <td>{row.sourceDestination || "-"}</td>
@@ -247,23 +251,23 @@ export function LogTables({ logRows, currentUserRole, onMaterialClick, onDrumCli
                     {!row.approvalStatus && <span style={{ color: "var(--text3)" }}>-</span>}
                   </td>
                   <td>
-                    <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
-                      <button className="btn btn-sm" style={{ padding: 4 }} title="Edit" onClick={() => handleOpenEdit(row)}>
-                        <Edit2 size={14} color="var(--blue)" />
+                    <div style={{ display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <button className="icon-button" style={{ width: 36, height: 36 }} title="Edit" onClick={() => handleOpenEdit(row)}>
+                        <Edit2 size={16} color="var(--blue)" />
                       </button>
                       {row.approvalStatus === "PENDING" && currentUserRole === "Manager" && (
                         <>
-                          <button className="btn btn-sm" style={{ padding: 4 }} title="Approve" onClick={() => onApproveTransaction?.(row.id)}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          <button className="icon-button" style={{ width: 36, height: 36 }} title="Approve" onClick={() => onApproveTransaction?.(row.id)}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                           </button>
-                          <button className="btn btn-sm" style={{ padding: 4 }} title="Reject" onClick={() => onRejectTransaction?.(row.id)}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          <button className="icon-button" style={{ width: 36, height: 36 }} title="Reject" onClick={() => onRejectTransaction?.(row.id)}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                           </button>
                         </>
                       )}
                       {onSoftDeleteTransaction && (
-                        <button className="btn btn-sm" style={{ padding: 4 }} title="Hapus" onClick={() => onSoftDeleteTransaction(row.id)}>
-                          <Trash2 size={14} color="var(--red)" />
+                        <button className="icon-button" style={{ width: 36, height: 36 }} title="Hapus" onClick={() => onSoftDeleteTransaction(row.id)}>
+                          <Trash2 size={16} color="var(--red)" />
                         </button>
                       )}
                     </div>
