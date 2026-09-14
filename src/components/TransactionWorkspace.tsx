@@ -296,12 +296,18 @@ export function TransactionWorkspace({
   }, [master.transactionTypes, transactionGroups]);
 
   const filteredSources = useMemo(() => {
-    if (!transactionGroups || transactionGroups.length === 0) return master.sources;
-    if (transactionGroups.includes("BORROW")) {
+    if (!form.transactionType) return master.sources;
+    const typeUpper = form.transactionType.toUpperCase();
+    
+    if (typeUpper.includes("BORROW")) {
       return master.sources.filter(s => s.toLowerCase().includes("other subcon"));
     }
+    if (typeUpper.includes("TRANSFER")) {
+      const gciWarehouses = new Set(master.warehouses.map(w => w.whGci).filter(Boolean));
+      return master.sources.filter(s => gciWarehouses.has(s));
+    }
     return master.sources;
-  }, [master.sources, transactionGroups]);
+  }, [master.sources, master.warehouses, form.transactionType]);
 
   useEffect(() => {
     if (filteredTxTypes.length === 1 && form.transactionType !== filteredTxTypes[0]) {

@@ -159,6 +159,7 @@ export function NotaDetailModal({ notaNo, rows, onClose, onUpdateTransaction }: 
                   <th>Material</th>
                   <th>Qty</th>
                   <th>Unit</th>
+                  <th>Site</th>
                   <th>Kondisi</th>
                   <th>Drum Number</th>
                   <th>Keterangan</th>
@@ -169,6 +170,7 @@ export function NotaDetailModal({ notaNo, rows, onClose, onUpdateTransaction }: 
                   const edits = editStates[row.id] || {};
                   const currentQty = edits.qty !== undefined ? edits.qty : row.qty;
                   const currentCondition = edits.condition !== undefined ? edits.condition : (row.condition || "");
+                  const currentSiteName = edits.siteName !== undefined ? edits.siteName : (row.siteName || "");
                   const currentDrum = edits.drumNumber !== undefined ? edits.drumNumber : (row.drumNumber || row.tagId || "");
                   const currentRemarks = edits.remarks !== undefined ? edits.remarks : (row.remarks || "");
 
@@ -183,6 +185,9 @@ export function NotaDetailModal({ notaNo, rows, onClose, onUpdateTransaction }: 
                           </td>
                           <td>{row.unit}</td>
                           <td>
+                            <input type="text" style={{ width: 120, padding: 4 }} value={currentSiteName || ""} onChange={(e) => handleEditChange(row.id, "siteName", e.target.value)} placeholder="Site Name" />
+                          </td>
+                          <td>
                             <input type="text" style={{ width: 90, padding: 4 }} value={currentCondition || ""} onChange={(e) => handleEditChange(row.id, "condition", e.target.value)} />
                           </td>
                           <td>
@@ -196,6 +201,7 @@ export function NotaDetailModal({ notaNo, rows, onClose, onUpdateTransaction }: 
                         <>
                           <td style={{ fontWeight: 600 }}>{formatNumber(row.qty)}</td>
                           <td>{row.unit}</td>
+                          <td>{row.siteName || "-"}</td>
                           <td>{row.condition || "-"}</td>
                           <td style={{ color: "var(--blue)" }}>{row.drumNumber || row.tagId || "-"}</td>
                           <td>{row.remarks || "-"}</td>
