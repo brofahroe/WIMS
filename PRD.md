@@ -382,3 +382,23 @@ User Input -> Form State -> Validation -> Temp Rows -> Process -> LogRows/Leftov
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 0.1.0 | 2026-07-15 | Kilo | Initial PRD creation |
+
+---
+
+## 10. Multi-Warehouse Rollout
+
+### 10.1 Operating Rules
+- Data gudang adalah bagian dari satu organisasi. Material, site, dan delivery order tetap master bersama.
+- Staff Gudang hanya dapat melihat dan mencatat transaksi di gudang yang ditugaskan. Manager dan Admin dapat melihat lintas gudang; Manager tidak mencatat transaksi rutin.
+- Gudang baru berstatus `SETUP` sampai saldo awal fisik disahkan Manager/Admin. Saldo awal mencakup material utuh dan leftovers, termasuk nomor drum/haspel bila tersedia.
+- Saldo opname memakai tanggal efektif. Hanya opname terverifikasi terbaru per gudang, material, dan jenis stok yang menjadi baseline; transaksi sampai cutoff tidak dihitung ulang ke saldo berjalan.
+- Transfer mengurangi stok gudang asal saat dikirim. Stok tujuan bertambah saat penerimaan dikonfirmasi; penerimaan parsial diperbolehkan. Sisa harus diterima atau diselesaikan pengirim sebagai barang kembali atau penyesuaian beralasan.
+- Barang dalam perjalanan tampil terpisah dari stok tersedia. Total lintas gudang tetap menunjukkan saldo terverifikasi meski riwayat cabang belum lengkap.
+
+### 10.2 Database Setup
+Apply `supabase_multi_warehouse_migration.sql` after `supabase_phase1_migration.sql`. This additive migration does not truncate existing transaction data. It marks the established Malang warehouse operational and assigns current warehouse staff to Malang; other warehouses remain in setup until their opening balances are verified and an Admin approves activation.
+
+### 10.3 Per-Warehouse Historical Import
+Use `npm run import:warehouse-history -- --file <workbook.xlsm> --warehouse <WH GCI> --cutoff YYYY-MM-DD` for a preview. The command requires `VITE_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the local environment. Review the exact-duplicate and invalid-row counts before applying. Add `--apply` to insert only rows for that warehouse on or before the cutoff; the script does not delete rows or update other warehouses. After import, reconcile the physical stock and propose/approve history completeness through the warehouse operations workflow.
+
+Do not use the legacy `npm run import:db` for a branch rollout: that importer clears whole tables and is intended only for a deliberate full database replacement.

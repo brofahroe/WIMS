@@ -33,6 +33,8 @@ export function Sidebar({ activeView, onViewChange, isMinimized = false, role = 
   let navItemsData: Array<{ key: ViewKey; label: string; icon: React.ComponentType<{ size?: number }> }> = [
     { key: "logfile", label: "Logfile Transaksi", icon: Database },
     { key: "inventory", label: "Stok Material", icon: PackageOpen },
+    { key: "warehouse_transfers", label: "Transfer Antar Gudang", icon: Repeat },
+    { key: "warehouse_admin", label: "Gudang & Opname", icon: PackageOpen },
     { key: "leftovers", label: "Leftovers & LO", icon: ReceiptText },
     { key: "drum_summary", label: "Summary Haspel", icon: Database },
   ];

@@ -12,6 +12,11 @@ export interface WarehouseOption {
   whId: string | null;
   whGci: string | null;
   picWh: string | null;
+  operationalStatus?: "SETUP" | "OPERATIONAL";
+  historyComplete?: boolean;
+  proposedOperationalStatus?: "SETUP" | "OPERATIONAL" | null;
+  proposedHistoryComplete?: boolean | null;
+  stockEffectiveDate?: string | null;
 }
 
 export interface MasterData {
@@ -124,6 +129,37 @@ export interface TransactionRecord {
   approvedAt?: string | null;
 }
 
+export interface OpeningBalanceRecord {
+  id: string;
+  warehouseGci: string;
+  materialName: string;
+  qty: number;
+  taggingType: TaggingType;
+  drumNumber?: string | null;
+  effectiveDate: string;
+  status: "PENDING" | "VERIFIED";
+}
+
+export interface WarehouseTransferLine {
+  id: string;
+  transferId: string;
+  sourceWarehouseGci: string;
+  destinationWarehouseGci: string;
+  materialName: string;
+  qtySent: number;
+  qtyReceived: number;
+  qtyReturned: number;
+  qtyWrittenOff: number;
+}
+
+export interface WarehouseTransfer {
+  id: string;
+  notaNo: string;
+  sourceWarehouseGci: string;
+  destinationWarehouseGci: string;
+  status: "IN_TRANSIT" | "PARTIALLY_RECEIVED" | "RECEIVED" | "RESOLVED";
+}
+
 export interface SeedData {
   sourceWorkbook: string;
   generatedAt: string;
@@ -136,6 +172,9 @@ export interface SeedData {
 }
 
 export interface InventoryRow extends MaterialItem {
+  openingStockCalc: number;
+  openingLeftoversCalc: number;
+  inTransitCalc: number;
   inboundCalc: number;
   outboundCalc: number;
   transferInCalc: number;
@@ -182,7 +221,7 @@ export interface ActionEvent {
   status: "SUCCESS" | "WARNING" | "INFO";
 }
 
-export type ViewKey = "dashboard" | "inbound" | "outbound" | "transfer_borrow" | "inventory" | "logfile" | "sites" | "nota" | "material" | "report" | "leftovers" | "material_history" | "delivery_orders" | "drum_history" | "drum_summary";
+export type ViewKey = "dashboard" | "inbound" | "outbound" | "transfer_borrow" | "warehouse_transfers" | "inventory" | "logfile" | "sites" | "nota" | "material" | "report" | "leftovers" | "material_history" | "delivery_orders" | "drum_history" | "drum_summary" | "warehouse_admin";
 
 export type UserRole = "Admin" | "Manager" | "Staff Gudang";
 
@@ -190,6 +229,7 @@ export interface User {
   id: string;
   email: string;
   role: UserRole;
+  warehouseAssignments?: string[];
 }
 
 export interface AuditTrail {

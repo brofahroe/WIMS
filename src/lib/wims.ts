@@ -4,11 +4,14 @@ import type {
   InventoryRow,
   MaterialItem,
   MasterData,
+  OpeningBalanceRecord,
   SiteItem,
   TaggingType,
   TransactionFormState,
   TransactionRecord,
+  User,
   WarehouseOption,
+  WarehouseTransferLine,
 } from "../types";
 
 export const POSITIVE_TYPES = new Set(["INBOUND", "BORROW IN", "TRANSFER IN"]);
@@ -75,6 +78,31 @@ export function getWarehouse(master: MasterData, whGci: string): WarehouseOption
   return master.warehouses.find((item) => compareText(item.whGci, whGci));
 }
 
+export function canAccessWarehouse(user: User, whGci: string): boolean {
+  if (user.role === "Admin" || user.role === "Manager") return true;
+  return user.warehouseAssignments?.some((warehouse) => compareText(warehouse, whGci)) ?? false;
+}
+
+export function getAccessibleWarehouses(warehouses: WarehouseOption[], user: User): WarehouseOption[] {
+  return warehouses.filter((warehouse) => {
+    const whGci = normalizeText(warehouse.whGci);
+    return whGci && whGci !== "ALL" && whGci !== "Dummy" && canAccessWarehouse(user, whGci);
+  });
+}
+
+export function canTransactInWarehouse(warehouse: WarehouseOption | undefined): boolean {
+  return warehouse?.operationalStatus === "OPERATIONAL";
+}
+
+export function getInTransitQty(lines: WarehouseTransferLine[], materialName: string, whFilter: string): number {
+  return lines.reduce((total, line) => {
+    if (!compareText(line.materialName, materialName)) return total;
+    if (whFilter !== "ALL" && !compareText(line.sourceWarehouseGci, whFilter) && !compareText(line.destinationWarehouseGci, whFilter)) return total;
+    const outstanding = Number(line.qtySent) - Number(line.qtyReceived) - Number(line.qtyReturned) - Number(line.qtyWrittenOff);
+    return total + Math.max(0, outstanding || 0);
+  }, 0);
+}
+
 export function getMaterial(materials: MaterialItem[], materialName: string): MaterialItem | undefined {
   return materials.find((item) => compareText(item.materialName, materialName));
 }
@@ -128,12 +156,38 @@ export function getAvailableReels(
   materialName: string,
   whGci: string,
   taggingType: TaggingType,
-  rows: TransactionRecord[]
+  rows: TransactionRecord[],
+  openingBalances: OpeningBalanceRecord[] = [],
 ): ReelBalance[] {
   const balances: Record<string, ReelBalance> = {};
+  const verifiedOpenings = openingBalances.filter((opening) =>
+    opening.status === "VERIFIED" &&
+    compareText(opening.materialName, materialName) &&
+    compareText(opening.warehouseGci, whGci) &&
+    opening.taggingType === taggingType,
+  );
+  const latestCutoff = verifiedOpenings.reduce((latest, opening) =>
+    !latest || opening.effectiveDate > latest ? opening.effectiveDate : latest,
+  "");
+
+  for (const opening of verifiedOpenings) {
+    if (opening.effectiveDate !== latestCutoff) continue;
+    const reelId = normalizeText(opening.drumNumber);
+    if (!reelId) continue;
+    if (!balances[reelId]) {
+      balances[reelId] = {
+        drumNumber: reelId,
+        taggingType: opening.taggingType,
+        remaining: 0,
+        date: opening.effectiveDate,
+      };
+    }
+    balances[reelId].remaining += Number(opening.qty) || 0;
+  }
 
   for (const row of rows) {
     if (!compareText(row.materialName, materialName) || !compareText(row.whGci, whGci) || row.taggingType !== taggingType) continue;
+    if (latestCutoff && (!row.date || normalizeText(row.date).slice(0, 10) <= latestCutoff)) continue;
     const reelId = row.drumNumber || row.tagId;
     if (!reelId) continue;
 
@@ -174,12 +228,39 @@ export function calculateInventory(
   logRows: TransactionRecord[],
   leftoverRows: TransactionRecord[],
   whFilter: string,
+  openingBalances: OpeningBalanceRecord[] = [],
+  transferLines: WarehouseTransferLine[] = [],
 ): InventoryRow[] {
   const includeWh = (row: TransactionRecord) => whFilter === "ALL" || compareText(row.whGci, whFilter);
+  const verifiedOpenings = openingBalances.filter((opening) => opening.status === "VERIFIED");
 
   return materials.map((material) => {
+    const materialOpenings = verifiedOpenings.filter((opening) => compareText(opening.materialName, material.materialName));
+    const latestCutoffByWarehouseAndTagging = new Map<string, string>();
+    for (const opening of materialOpenings) {
+      const key = `${normalizeText(opening.warehouseGci)}:${opening.taggingType}`;
+      const latestCutoff = latestCutoffByWarehouseAndTagging.get(key);
+      if (!latestCutoff || opening.effectiveDate > latestCutoff) latestCutoffByWarehouseAndTagging.set(key, opening.effectiveDate);
+    }
+    const includedOpenings = materialOpenings.filter((opening) =>
+      (whFilter === "ALL" || compareText(opening.warehouseGci, whFilter)) &&
+      latestCutoffByWarehouseAndTagging.get(`${normalizeText(opening.warehouseGci)}:${opening.taggingType}`) === opening.effectiveDate,
+    );
+    const includeMovement = (row: TransactionRecord) => {
+      if (!includeWh(row)) return false;
+      const cutoff = latestCutoffByWarehouseAndTagging.get(`${normalizeText(row.whGci)}:${row.taggingType}`);
+      if (!cutoff) return true;
+      return Boolean(row.date && normalizeText(row.date).slice(0, 10) > cutoff);
+    };
     const row: InventoryRow = {
       ...material,
+      openingStockCalc: includedOpenings
+        .filter((opening) => opening.taggingType === "LOGFILE")
+        .reduce((total, opening) => total + (Number(opening.qty) || 0), 0),
+      openingLeftoversCalc: includedOpenings
+        .filter((opening) => opening.taggingType === "LEFTOVERS")
+        .reduce((total, opening) => total + (Number(opening.qty) || 0), 0),
+      inTransitCalc: getInTransitQty(transferLines, material.materialName || "", whFilter),
       inboundCalc: 0,
       outboundCalc: 0,
       transferInCalc: 0,
@@ -192,11 +273,12 @@ export function calculateInventory(
       leftoversStockCalc: 0,
     };
     for (const tx of logRows) {
-      if (!includeWh(tx) || !compareText(tx.materialName, material.materialName)) continue;
+      if (!includeMovement(tx) || !compareText(tx.materialName, material.materialName)) continue;
       const bucket = transactionBucket(tx.transactionType);
       if (bucket) row[bucket] += Number(tx.qty) || 0;
     }
     row.stockWhCalc =
+      row.openingStockCalc +
       row.inboundCalc +
       row.transferInCalc +
       row.borrowInCalc -
@@ -205,9 +287,10 @@ export function calculateInventory(
       row.borrowOutCalc;
 
     for (const tx of leftoverRows) {
-      if (!includeWh(tx) || !compareText(tx.materialName, material.materialName)) continue;
+      if (!includeMovement(tx) || !compareText(tx.materialName, material.materialName)) continue;
       row.leftoversStockCalc += movementSign(tx.transactionType) * (Number(tx.qty) || 0);
     }
+    row.leftoversStockCalc += row.openingLeftoversCalc;
     return row;
   });
 }

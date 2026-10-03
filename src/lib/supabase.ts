@@ -133,6 +133,163 @@ export async function getUserRole(userId: string): Promise<string | null> {
   return data.role;
 }
 
+export async function getUserWarehouseAssignments(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('user_warehouse_assignments')
+    .select('warehouse_gci')
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Error fetching warehouse assignments:', error);
+    return [];
+  }
+
+  return (data ?? []).map((row) => String(row.warehouse_gci));
+}
+
+export async function dispatchWarehouseTransfer(input: {
+  notaNo: string;
+  sourceWarehouseGci: string;
+  destinationWarehouseGci: string;
+  materialName: string;
+  qty: number;
+  unit: string;
+  drumNumber: string;
+  date: string;
+  remarks: string;
+}): Promise<void> {
+  const { error } = await supabase.rpc('dispatch_warehouse_transfer', {
+    p_transfer_id: crypto.randomUUID(),
+    p_line_id: crypto.randomUUID(),
+    p_nota_no: input.notaNo,
+    p_source_warehouse: input.sourceWarehouseGci,
+    p_destination_warehouse: input.destinationWarehouseGci,
+    p_material_name: input.materialName,
+    p_qty: input.qty,
+    p_unit: input.unit,
+    p_drum_number: input.drumNumber || null,
+    p_date: input.date,
+    p_remarks: input.remarks || null,
+  });
+
+  if (error) throw error;
+}
+
+export async function receiveWarehouseTransfer(lineId: string, qty: number, remarks: string): Promise<void> {
+  const { error } = await supabase.rpc('receive_warehouse_transfer', {
+    p_transfer_line_id: lineId,
+    p_qty_received: qty,
+    p_remarks: remarks || null,
+  });
+
+  if (error) throw error;
+}
+
+export async function resolveWarehouseTransferLine(
+  lineId: string,
+  qtyReturned: number,
+  qtyWrittenOff: number,
+  reason: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('resolve_warehouse_transfer_line', {
+    p_transfer_line_id: lineId,
+    p_qty_returned: qtyReturned,
+    p_qty_written_off: qtyWrittenOff,
+    p_reason: reason,
+  });
+
+  if (error) throw error;
+}
+
+export interface WarehouseAssignment {
+  user_id: string;
+  warehouse_gci: string;
+  assigned_by: string | null;
+  assigned_at: string;
+}
+
+export async function getWarehouseAssignments(): Promise<WarehouseAssignment[]> {
+  const { data, error } = await supabase
+    .from('user_warehouse_assignments')
+    .select('*')
+    .order('assigned_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function assignUserToWarehouse(userId: string, warehouseGci: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from('user_warehouse_assignments').insert({
+    user_id: userId,
+    warehouse_gci: warehouseGci,
+    assigned_by: user?.id ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function removeWarehouseAssignment(userId: string, warehouseGci: string): Promise<void> {
+  const { error } = await supabase
+    .from('user_warehouse_assignments')
+    .delete()
+    .eq('user_id', userId)
+    .eq('warehouse_gci', warehouseGci);
+  if (error) throw error;
+}
+
+export async function createOpeningBalance(input: {
+  warehouseGci: string;
+  materialName: string;
+  qty: number;
+  taggingType: 'LOGFILE' | 'LEFTOVERS';
+  drumNumber: string;
+  effectiveDate: string;
+}): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from('warehouse_opening_balances').insert({
+    id: crypto.randomUUID(),
+    warehouseGci: input.warehouseGci,
+    materialName: input.materialName,
+    qty: input.qty,
+    taggingType: input.taggingType,
+    drumNumber: input.drumNumber || null,
+    effectiveDate: input.effectiveDate,
+    status: 'PENDING',
+    createdBy: user?.id ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function verifyOpeningBalance(id: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from('warehouse_opening_balances').update({
+    status: 'VERIFIED',
+    verifiedBy: user?.id ?? null,
+    verifiedAt: new Date().toISOString(),
+  }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function proposeWarehouseStatus(
+  warehouseGci: string,
+  operationalStatus: 'SETUP' | 'OPERATIONAL',
+  historyComplete: boolean,
+): Promise<void> {
+  const { error } = await supabase.rpc('propose_warehouse_status', {
+    p_warehouse_gci: warehouseGci,
+    p_operational_status: operationalStatus,
+    p_history_complete: historyComplete,
+  });
+  if (error) throw error;
+}
+
+export async function approveWarehouseStatus(warehouseGci: string, effectiveDate: string | null): Promise<void> {
+  const { error } = await supabase.rpc('approve_warehouse_status', {
+    p_warehouse_gci: warehouseGci,
+    p_effective_date: effectiveDate,
+  });
+  if (error) throw error;
+}
+
 // Bug #5 & #8 fix: validate file type and size before uploading to prevent
 // dangerous file types being stored and to avoid wasting storage quota.
 const ALLOWED_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif']);

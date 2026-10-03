@@ -40,7 +40,7 @@ export function InventorySummary({
   const { items: sortedItems, requestSort, sortConfig } = useSortableData(filtered);
 
   const handleExportCsv = () => {
-    const headers = ["Kode", "Nama Material", "Tipe", "Unit", "Inbound", "Outbound", "TF IN", "TF OUT", "BR IN", "BR OUT", "Stok WH", "LO Stok", "Keterangan"];
+    const headers = ["Kode", "Nama Material", "Tipe", "Unit", "Inbound", "Outbound", "TF IN", "TF OUT", "BR IN", "BR OUT", "Stok WH", "Dalam Perjalanan", "LO Stok", "Keterangan"];
     const rows = filtered.map((m) => [
       `"${m.materialCode || ""}"`,
       `"${m.materialName || ""}"`,
@@ -53,6 +53,7 @@ export function InventorySummary({
       `"${m.borrowInCalc || 0}"`,
       `"${m.borrowOutCalc || 0}"`,
       `"${m.stockWhCalc || 0}"`,
+      `"${m.inTransitCalc || 0}"`,
       `"${m.leftoversStockCalc || 0}"`,
       `"${m.addRemark || ""}"`
     ]);
@@ -126,6 +127,7 @@ export function InventorySummary({
                 <SortableHeader label="BR IN" sortKey="borrowInCalc" currentSort={sortConfig} requestSort={requestSort} align="right" />
                 <SortableHeader label="BR OUT" sortKey="borrowOutCalc" currentSort={sortConfig} requestSort={requestSort} align="right" />
                 <SortableHeader label="Stok WH" sortKey="stockWhCalc" currentSort={sortConfig} requestSort={requestSort} align="right" />
+                <SortableHeader label="Dalam Perjalanan" sortKey="inTransitCalc" currentSort={sortConfig} requestSort={requestSort} align="right" />
                 <SortableHeader label="LO Stok" sortKey="leftoversStockCalc" currentSort={sortConfig} requestSort={requestSort} align="right" />
                 <SortableHeader label="Keterangan" sortKey="addRemark" currentSort={sortConfig} requestSort={requestSort} />
               </tr>
@@ -152,6 +154,7 @@ export function InventorySummary({
                   <td className={`numeric ${row.stockWhCalc < 0 ? "stock-low" : row.stockWhCalc === 0 ? "stock-warn" : "stock-ok"}`}>
                     <b>{formatNumber(row.stockWhCalc)}</b>
                   </td>
+                  <td className="numeric">{formatNumber(row.inTransitCalc)}</td>
                   <td className="numeric">
                     <b style={{ color: row.leftoversStockCalc > 0 ? "var(--purple)" : "inherit" }}>
                       {formatNumber(row.leftoversStockCalc)}

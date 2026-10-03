@@ -5,9 +5,11 @@ import type {
   InventoryRow,
   MasterData,
   MaterialItem,
+  OpeningBalanceRecord,
   SiteItem,
   TransactionFormState,
   TransactionRecord,
+  WarehouseOption,
 } from "../types";
 import {
   asDateInput,
@@ -24,6 +26,7 @@ import {
   validateForm,
   movementSign,
   getAvailableReels,
+  canTransactInWarehouse,
 } from "../lib/wims";
 import { ReceiptModal } from "./ReceiptModal";
 import { uploadProofImage } from "../lib/supabase";
@@ -38,6 +41,7 @@ interface TransactionWorkspaceProps {
   tempRows: TransactionRecord[];
   logRows: TransactionRecord[];
   leftoverRows: TransactionRecord[];
+  openingBalances: OpeningBalanceRecord[];
   onAddTemp: (row: TransactionRecord) => void;
   onRemoveTemp: (id: string) => void;
   onClearTemp: () => void;
@@ -47,10 +51,11 @@ interface TransactionWorkspaceProps {
   onPrintNota?: () => void;
   transactionGroups?: ("INBOUND" | "OUTBOUND" | "TRANSFER" | "BORROW")[];
   defaultWarehouse?: string;
+  warehouseOptions: WarehouseOption[];
 }
 
-function defaultForm(master: MasterData, defaultWarehouse?: string): TransactionFormState {
-  const firstWh = (defaultWarehouse && defaultWarehouse !== "ALL" ? defaultWarehouse : master.warehouses.find((item) => item.whGci && item.whGci !== "ALL")?.whGci) ?? "";
+function defaultForm(master: MasterData, defaultWarehouse?: string, warehouseOptions: WarehouseOption[] = master.warehouses): TransactionFormState {
+  const firstWh = (defaultWarehouse && defaultWarehouse !== "ALL" ? defaultWarehouse : warehouseOptions.find((item) => item.whGci)?.whGci) ?? "";
   return {
     taggingType: "LOGFILE",
     transactionType: "",
@@ -83,6 +88,7 @@ export function TransactionWorkspace({
   tempRows,
   logRows,
   leftoverRows,
+  openingBalances,
   onAddTemp,
   onRemoveTemp,
   onClearTemp,
@@ -90,8 +96,9 @@ export function TransactionWorkspace({
   onPrintNota,
   transactionGroups,
   defaultWarehouse,
+  warehouseOptions,
 }: TransactionWorkspaceProps) {
-  const [form, setForm] = useState<TransactionFormState>(() => defaultForm(master, defaultWarehouse));
+  const [form, setForm] = useState<TransactionFormState>(() => defaultForm(master, defaultWarehouse, warehouseOptions));
   const [submitted, setSubmitted] = useState(false);
   const [receiptData, setReceiptData] = useState<{ notaNo: string; rows: TransactionRecord[] } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -158,8 +165,8 @@ export function TransactionWorkspace({
   
   const availableReels = useMemo(() => {
     const allRows = [...logRows, ...leftoverRows, ...tempRows];
-    return getAvailableReels(form.materialName, form.whGci, form.taggingType, allRows);
-  }, [form.materialName, form.whGci, form.taggingType, logRows, leftoverRows, tempRows]);
+    return getAvailableReels(form.materialName, form.whGci, form.taggingType, allRows, openingBalances);
+  }, [form.materialName, form.whGci, form.taggingType, logRows, leftoverRows, tempRows, openingBalances]);
 
   const liveValidation = validateForm(form, materials, inventory);
 
@@ -181,6 +188,10 @@ export function TransactionWorkspace({
   const handleInput = () => {
     setSubmitted(true);
     if (liveValidation.errors.length > 0) return;
+    if (!canTransactInWarehouse(getWarehouse(master, form.whGci))) {
+      alert("Gudang belum siap beroperasi. Selesaikan dan sahkan stok opname terlebih dahulu.");
+      return;
+    }
     const nextLine = tempRows.reduce((max, row) => Math.max(max, Number(row.lineId) || 0), 0) + 1;
     const allRows = [...logRows, ...leftoverRows, ...tempRows];
     
@@ -220,7 +231,7 @@ export function TransactionWorkspace({
       }
     } else if (isCable && sign < 0) {
        const qty = Number(form.qty) || 0;
-       let availableReelsList = getAvailableReels(form.materialName, form.whGci, form.taggingType, allRows);
+      let availableReelsList = getAvailableReels(form.materialName, form.whGci, form.taggingType, allRows, openingBalances);
        
        if (form.drumNumber) {
           availableReelsList = availableReelsList.filter(r => r.drumNumber === form.drumNumber);
@@ -267,7 +278,7 @@ export function TransactionWorkspace({
   };
 
   const handleResetForm = () => {
-    setForm(defaultForm(master, defaultWarehouse));
+    setForm(defaultForm(master, defaultWarehouse, warehouseOptions));
     setSubmitted(false);
   };
 
@@ -303,7 +314,7 @@ export function TransactionWorkspace({
       return master.sources.filter(s => s.toLowerCase().includes("other subcon"));
     }
     if (typeUpper.includes("TRANSFER")) {
-      const gciWarehouses = new Set(master.warehouses.map(w => w.whGci).filter(Boolean));
+      const gciWarehouses = new Set(master.warehouses.filter(canTransactInWarehouse).map(w => w.whGci).filter(Boolean));
       return master.sources.filter(s => gciWarehouses.has(s));
     }
     return master.sources;
@@ -319,10 +330,13 @@ export function TransactionWorkspace({
   }, [filteredTxTypes, filteredSources, form.transactionType, form.sourceDestination]);
 
   useEffect(() => {
-    if (defaultWarehouse && defaultWarehouse !== "ALL" && form.whGci !== defaultWarehouse && tempRows.length === 0) {
-      setField("whGci", defaultWarehouse);
+    if (tempRows.length > 0 || warehouseOptions.length === 0) return;
+    if (defaultWarehouse && defaultWarehouse !== "ALL" && warehouseOptions.some((warehouse) => warehouse.whGci === defaultWarehouse)) {
+      if (form.whGci !== defaultWarehouse) setField("whGci", defaultWarehouse);
+    } else if (!warehouseOptions.some((warehouse) => warehouse.whGci === form.whGci)) {
+      setField("whGci", warehouseOptions[0].whGci ?? "");
     }
-  }, [defaultWarehouse]);
+  }, [defaultWarehouse, form.whGci, tempRows.length, warehouseOptions]);
 
   return (
     <div className="page active" id="page-transaksi">
@@ -364,7 +378,7 @@ export function TransactionWorkspace({
             <label>WH GCI</label>
             <select value={form.whGci} onChange={(e) => setField("whGci", e.target.value)} disabled={tempRows.length > 0}>
               <option value="">-- Pilih WH --</option>
-              {master.warehouses.filter((wh) => wh.whGci).map((wh) => (
+              {warehouseOptions.map((wh) => (
                 <option key={wh.whGci ?? ""} value={wh.whGci ?? ""}>{wh.whGci}</option>
               ))}
             </select>

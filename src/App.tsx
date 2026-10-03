@@ -15,11 +15,13 @@ import { MaterialHistory } from "./components/MaterialHistory";
 import { DeliveryOrders } from "./components/DeliveryOrders";
 import { DrumHistory } from "./components/DrumHistory";
 import { DrumSummary } from "./components/DrumSummary";
+import { WarehouseTransferWorkspace } from "./components/WarehouseTransferWorkspace";
+import { WarehouseOperations } from "./components/WarehouseOperations";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import type { ActionEvent, SeedData, TransactionRecord, ViewKey, User, UserRole } from "./types";
+import type { ActionEvent, OpeningBalanceRecord, SeedData, TransactionRecord, ViewKey, User, UserRole, WarehouseTransfer, WarehouseTransferLine } from "./types";
 import { LoginPage } from "./components/LoginPage";
-import { buildRecentEvents, calculateInventory, createAuditTrail, saveStorage, useSeedOrStorage } from "./lib/wims";
-import { supabase, fetchAll, getUserRole, insertAuditTrail } from "./lib/supabase";
+import { buildRecentEvents, calculateInventory, createAuditTrail, getAccessibleWarehouses, canTransactInWarehouse, saveStorage, useSeedOrStorage } from "./lib/wims";
+import { supabase, fetchAll, getUserRole, getUserWarehouseAssignments, insertAuditTrail } from "./lib/supabase";
 import { useIdleTimer } from "./hooks/useIdleTimer";
 import { useOfflineSync } from "./hooks/useOfflineSync";
 import { enqueueInsert, enqueueUpdate, enqueueDelete } from "./lib/offlineQueue";
@@ -38,6 +40,7 @@ const VIEW_TITLES: Record<ViewKey, string> = {
   inbound: "Input Barang Masuk (Inbound)",
   outbound: "Input Barang Keluar (Outbound)",
   transfer_borrow: "Transfer & Peminjaman",
+  warehouse_transfers: "Transfer Antar Gudang",
   inventory: "Stok Material",
   logfile: "Logfile Transaksi",
   leftovers: "Leftovers & LO",
@@ -49,22 +52,23 @@ const VIEW_TITLES: Record<ViewKey, string> = {
   delivery_orders: "Delivery Orders",
   drum_history: "History Haspel",
   drum_summary: "Summary Haspel",
+  warehouse_admin: "Gudang & Opname",
 };
 
 const ROLE_ALLOWED_VIEWS: Record<UserRole, ViewKey[]> = {
   Admin: [
     "dashboard","inbound","outbound","transfer_borrow","inventory","logfile",
     "leftovers","sites","material","report","nota","material_history",
-    "delivery_orders","drum_history","drum_summary",
+    "delivery_orders","drum_history","drum_summary","warehouse_admin","warehouse_transfers",
   ],
   Manager: [
     "dashboard","inventory","logfile","sites","material","report",
-    "nota","material_history","delivery_orders","drum_history","drum_summary",
+    "nota","material_history","delivery_orders","drum_history","drum_summary","warehouse_admin","warehouse_transfers",
   ],
   "Staff Gudang": [
     "dashboard","inbound","outbound","transfer_borrow","inventory",
     "leftovers","sites","report","nota","material_history",
-    "delivery_orders","drum_history","drum_summary",
+    "delivery_orders","drum_history","drum_summary","warehouse_admin","warehouse_transfers",
   ],
 };
 
@@ -114,6 +118,18 @@ function App() {
   const [materials, setMaterials] = useState(seedData.materials);
   const [deliveryOrders, setDeliveryOrders] = useState(seedData.deliveryOrders);
   const [sites, setSites] = useState(seedData.sites);
+  const [openingBalances, setOpeningBalances] = useState<OpeningBalanceRecord[]>([]);
+  const [warehouseTransfers, setWarehouseTransfers] = useState<WarehouseTransfer[]>([]);
+  const [transferLines, setTransferLines] = useState<WarehouseTransferLine[]>([]);
+
+  const accessibleWarehouses = useMemo(
+    () => currentUser ? getAccessibleWarehouses(master.warehouses, currentUser) : [],
+    [currentUser, master.warehouses],
+  );
+  const transactionWarehouses = useMemo(
+    () => accessibleWarehouses.filter(canTransactInWarehouse),
+    [accessibleWarehouses],
+  );
 
   const initialWh = useMemo(() => master.warehouses.find(w => w.whGci?.toLowerCase().includes('malang'))?.whGci || "ALL", [master.warehouses]);
   const [warehouseFilter, setWarehouseFilter] = useState(initialWh);
@@ -127,21 +143,32 @@ function App() {
   );
 
   const inventory = useMemo(
-    () => calculateInventory(materials, logRows, leftoverRows, warehouseFilter),
-    [materials, logRows, leftoverRows, warehouseFilter],
+    () => calculateInventory(materials, logRows, leftoverRows, warehouseFilter, openingBalances, transferLines),
+    [materials, logRows, leftoverRows, warehouseFilter, openingBalances, transferLines],
   );
+
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== "Staff Gudang") return;
+    const currentWarehouseIsAccessible = accessibleWarehouses.some((warehouse) => warehouse.whGci === warehouseFilter);
+    if (!currentWarehouseIsAccessible) {
+      setWarehouseFilter(accessibleWarehouses[0]?.whGci ?? "");
+    }
+  }, [currentUser, accessibleWarehouses, warehouseFilter]);
 
   const isSupabaseEnabled = Boolean(import.meta.env.VITE_SUPABASE_URL);
 
   const loadData = useCallback(async () => {
     if (!isSupabaseEnabled) return;
     
-    const [txs, mats, whs, doData, sitesData, settings] = await Promise.all([
+    const [txs, mats, whs, doData, sitesData, openingData, transferData, transferLineData, settings] = await Promise.all([
       fetchAll('transactions'),
       fetchAll('master_materials'),
       fetchAll('warehouses'),
       fetchAll('delivery_orders'),
       fetchAll('sites'),
+      fetchAll('warehouse_opening_balances'),
+      fetchAll('warehouse_transfers'),
+      fetchAll('warehouse_transfer_lines'),
       supabase.from('app_settings').select('*').eq('id', 'master').single()
     ]);
 
@@ -155,6 +182,9 @@ function App() {
     if (mats && mats.length > 0) setMaterials(mats);
     if (doData && doData.length > 0) setDeliveryOrders(doData);
     if (sitesData && sitesData.length > 0) setSites(sitesData);
+    if (openingData) setOpeningBalances(openingData);
+    if (transferData) setWarehouseTransfers(transferData);
+    if (transferLineData) setTransferLines(transferLineData);
     
     if (settings.data && whs && whs.length > 0) {
        setMaster({ ...settings.data.data, warehouses: whs });
@@ -185,8 +215,12 @@ function App() {
         try {
           // Timeout for getUserRole in case Supabase is paused/hanging
           const rolePromise = getUserRole(session.user.id);
+          const assignmentsPromise = getUserWarehouseAssignments(session.user.id);
           const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
-           const role = await Promise.race([rolePromise, timeoutPromise]) as string | null;
+          const [role, warehouseAssignments] = await Promise.race([
+            Promise.all([rolePromise, assignmentsPromise]),
+            timeoutPromise,
+          ]) as [string | null, string[]];
           
           if (!role) {
             console.warn(`Role tidak ditemukan untuk user ${session.user.id}. Silakan jalankan SQL untuk mengatur role di tabel user_roles.`);
@@ -195,14 +229,16 @@ function App() {
           setCurrentUser({
             id: session.user.id,
             email: session.user.email || '',
-            role: (role === 'Admin' || role === 'Manager' || role === 'Staff Gudang' ? role : 'Staff Gudang') as UserRole
+            role: (role === 'Admin' || role === 'Manager' || role === 'Staff Gudang' ? role : 'Staff Gudang') as UserRole,
+            warehouseAssignments,
           });
         } catch (error) {
           console.warn("Failed or timed out fetching user role:", error);
           setCurrentUser({
             id: session.user.id,
             email: session.user.email || '',
-            role: 'Staff Gudang' // Fallback
+            role: 'Staff Gudang',
+            warehouseAssignments: [],
           });
         }
       } else {
@@ -443,7 +479,7 @@ function App() {
     switch (view) {
       case "inbound": return ["INBOUND"];
       case "outbound": return ["OUTBOUND"];
-      case "transfer_borrow": return ["TRANSFER", "BORROW"];
+      case "transfer_borrow": return ["BORROW"];
       default: return undefined;
     }
   };
@@ -452,6 +488,7 @@ function App() {
     <TransactionWorkspace
       transactionGroups={getTransactionGroup(activeView) as any}
       defaultWarehouse={warehouseFilter}
+      warehouseOptions={transactionWarehouses}
       master={master}
       materials={materials}
       deliveryOrders={deliveryOrders}
@@ -460,6 +497,7 @@ function App() {
       tempRows={tempRows}
       logRows={logRows}
       leftoverRows={leftoverRows}
+      openingBalances={openingBalances}
       onAddTemp={(row) => setTempRows((current) => [...current, row])}
       onRemoveTemp={(id) => setTempRows((current) => current.filter((row) => row.id !== id))}
       onClearTemp={() => setTempRows([])}
@@ -633,9 +671,8 @@ function App() {
               <label className="warehouse-select" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                 <Warehouse size={16} />
                 <select value={warehouseFilter} onChange={(event) => setWarehouseFilter(event.target.value)} style={{ border: 0, outline: 0, background: "transparent", color: "var(--text)" }}>
-                  <option value="ALL">All Warehouses</option>
-                  {master.warehouses
-                    .filter((wh) => wh.whGci)
+                  {currentUser.role !== "Staff Gudang" && <option value="ALL">All Warehouses</option>}
+                  {accessibleWarehouses
                     .map((wh) => (
                       <option key={wh.whGci ?? ""} value={wh.whGci ?? ""}>
                         {wh.whGci}
@@ -656,6 +693,19 @@ function App() {
             {activeView === "dashboard" ? (
               <Dashboard inventory={inventory} logRows={logRows} leftoverRows={leftoverRows} onMaterialClick={handleMaterialClick} />
             ) : null}
+            {activeView === "transfer_borrow" || activeView === "warehouse_transfers" ? (
+              <WarehouseTransferWorkspace
+                master={master}
+                materials={materials}
+                logRows={logRows}
+                transfers={warehouseTransfers}
+                transferLines={transferLines}
+                sourceWarehouses={transactionWarehouses}
+                destinationWarehouses={master.warehouses.filter(canTransactInWarehouse)}
+                currentUser={currentUser}
+                onRefresh={loadData}
+              />
+            ) : null}
             {["inbound", "outbound", "transfer_borrow"].includes(activeView) ? transactionWorkspace : null}
             {activeView === "inventory" ? (
               <InventorySummary
@@ -664,6 +714,15 @@ function App() {
                 warehouseFilter={warehouseFilter}
                 onWarehouseFilterChange={setWarehouseFilter}
                 onMaterialClick={handleMaterialClick}
+              />
+            ) : null}
+            {activeView === "warehouse_admin" ? (
+              <WarehouseOperations
+                master={master}
+                materials={materials}
+                openings={openingBalances}
+                currentUser={currentUser}
+                onRefresh={loadData}
               />
             ) : null}
              {activeView === "logfile" ? <LogTables logRows={logRows} currentUserRole={currentUser.role} onMaterialClick={handleMaterialClick} onDrumClick={handleDrumClick} onUpdateTransaction={handleUpdateTransaction} onSoftDeleteTransaction={handleSoftDeleteTransaction} onApproveTransaction={handleApproveTransaction} onRejectTransaction={handleRejectTransaction} /> : null}
