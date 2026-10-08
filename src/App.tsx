@@ -17,6 +17,7 @@ import { DrumHistory } from "./components/DrumHistory";
 import { DrumSummary } from "./components/DrumSummary";
 import { WarehouseTransferWorkspace } from "./components/WarehouseTransferWorkspace";
 import { WarehouseOperations } from "./components/WarehouseOperations";
+import { SiteSummaryMonthly } from "./components/SiteSummaryMonthly";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import type { ActionEvent, OpeningBalanceRecord, SeedData, TransactionRecord, ViewKey, User, UserRole, WarehouseTransfer, WarehouseTransferLine } from "./types";
 import { LoginPage } from "./components/LoginPage";
@@ -53,22 +54,23 @@ const VIEW_TITLES: Record<ViewKey, string> = {
   drum_history: "History Haspel",
   drum_summary: "Summary Haspel",
   warehouse_admin: "Gudang & Opname",
+  site_summary: "Summary Inbound & Outbound per Site (Bulanan)",
 };
 
 const ROLE_ALLOWED_VIEWS: Record<UserRole, ViewKey[]> = {
   Admin: [
     "dashboard","inbound","outbound","transfer_borrow","inventory","logfile",
     "leftovers","sites","material","report","nota","material_history",
-    "delivery_orders","drum_history","drum_summary","warehouse_admin","warehouse_transfers",
+    "delivery_orders","drum_history","drum_summary","warehouse_admin","warehouse_transfers","site_summary",
   ],
   Manager: [
     "dashboard","inventory","logfile","sites","material","report",
-    "nota","material_history","delivery_orders","drum_history","drum_summary","warehouse_admin","warehouse_transfers",
+    "nota","material_history","delivery_orders","drum_history","drum_summary","warehouse_admin","warehouse_transfers","site_summary",
   ],
   "Staff Gudang": [
     "dashboard","inbound","outbound","transfer_borrow","inventory",
     "leftovers","sites","report","nota","material_history",
-    "delivery_orders","drum_history","drum_summary","warehouse_admin","warehouse_transfers",
+    "delivery_orders","drum_history","drum_summary","warehouse_admin","warehouse_transfers","site_summary",
   ],
 };
 
@@ -733,6 +735,16 @@ function App() {
             ) : null}
             {activeView === "drum_summary" ? (
               <DrumSummary logRows={logRows} leftoverRows={leftoverRows} onDrumClick={handleDrumClick} />
+            ) : null}
+            {activeView === "site_summary" ? (
+              <SiteSummaryMonthly
+                logRows={logRows}
+                leftoverRows={leftoverRows}
+                master={master}
+                sites={sites}
+                onMaterialClick={handleMaterialClick}
+                onDrumClick={handleDrumClick}
+              />
             ) : null}
             {activeView === "delivery_orders" ? <DeliveryOrders orders={deliveryOrders} master={master} logRows={logRows} onRefresh={loadData} /> : null}
             {activeView === "material" ? <MasterMaterial materials={materials} onMaterialClick={handleMaterialClick} onRefresh={loadData} /> : null}

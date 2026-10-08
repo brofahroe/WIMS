@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import type { InventoryRow, TransactionRecord } from "../types";
 import { formatNumber } from "../lib/wims";
 
@@ -22,6 +22,7 @@ const TX_BADGE: Record<string, string> = {
 
 export function Dashboard({ inventory, logRows, leftoverRows, onMaterialClick }: DashboardProps) {
   const [timeFilter, setTimeFilter] = useState<"semua" | "bulan" | "minggu" | "hari">("semua");
+  const [stockViewTab, setStockViewTab] = useState<"semua" | "kritis" | "habis">("semua");
 
   const filterByTime = (dateStr: string | undefined | null) => {
     if (timeFilter === "semua" || !dateStr) return true;
@@ -54,10 +55,17 @@ export function Dashboard({ inventory, logRows, leftoverRows, onMaterialClick }:
   }).length;
   const activeItemsCount = inventory.length;
 
-  const criticalStock = [...inventory]
-    .filter((item) => item.stockWhCalc <= 5)
-    .sort((a, b) => a.stockWhCalc - b.stockWhCalc)
-    .slice(0, 8);
+  const criticalStock = useMemo(() => {
+    return [...inventory]
+      .filter((item) => item.stockWhCalc >= 1 && item.stockWhCalc < 5)
+      .sort((a, b) => a.stockWhCalc - b.stockWhCalc);
+  }, [inventory]);
+
+  const outOfStock = useMemo(() => {
+    return [...inventory]
+      .filter((item) => item.stockWhCalc <= 0)
+      .sort((a, b) => a.stockWhCalc - b.stockWhCalc);
+  }, [inventory]);
 
   const zteStock = inventory.filter((item) => item.typeMaterial === "ZTE Material");
   const emrStock = inventory.filter((item) => item.typeMaterial === "EMR Material");
@@ -156,52 +164,209 @@ export function Dashboard({ inventory, logRows, leftoverRows, onMaterialClick }:
             </div>
           </div>
 
-          {/* Critical Stock */}
-          <div className="card" style={{ marginTop: 20 }}>
-            <div className="card-header"><span className="card-title">⚠ Stok Kritis (≤ 5)</span></div>
-            <div className="table-scroll">
-              <table>
-              <thead>
-                 <tr>
-                   <th>Material</th>
-                   <th>Unit</th>
-                   <th>Stok WH</th>
-                  <th>Sisa LO</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {criticalStock.map((item) => (
-                  <tr key={item.materialCode}>
-                     <td>
-                       <span 
-                         style={{ cursor: "pointer", color: "var(--blue)", textDecoration: "underline" }} 
-                         onClick={() => onMaterialClick && onMaterialClick(item.materialName || "")}
-                       >
-                         {item.materialName}
-                       </span>
-                     </td>
-                     <td>{item.unit}</td>
-                    <td className={item.stockWhCalc <= 0 ? "stock-low" : "stock-warn"}>{formatNumber(item.stockWhCalc)}</td>
-                    <td style={{ color: "var(--orange)", fontWeight: 500 }}>{formatNumber(item.leftoversStockCalc)}</td>
-                    <td>
-                      {item.stockWhCalc < 0 ? (
-                        <span className="badge" style={{ background: "#FCEBEB", color: "#791F1F" }}>Minus!</span>
-                      ) : item.stockWhCalc === 0 ? (
-                        <span className="badge" style={{ background: "#FCEBEB", color: "#791F1F" }}>Habis</span>
-                      ) : (
-                        <span className="badge badge-transfer">Segera Inbound</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {criticalStock.length === 0 && (
-                  <tr><td colSpan={5} style={{ textAlign: "center", padding: 20, color: "var(--text3)" }}>Aman, tidak ada stok kritis.</td></tr>
-                )}
-              </tbody>
-            </table>
+          {/* Stock Monitoring & Separation Controls */}
+          <div style={{ marginTop: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
+              Monitoring Stok Menipis & Habis
+            </div>
+            <div style={{ display: "inline-flex", gap: 4, background: "var(--surface)", padding: 3, border: "1px solid var(--border)", borderRadius: "var(--radius)" }}>
+              <button
+                type="button"
+                className={`btn btn-sm ${stockViewTab === "semua" ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setStockViewTab("semua")}
+                style={{ fontSize: 11, padding: "3px 8px" }}
+              >
+                Pisahkan Keduanya ({criticalStock.length + outOfStock.length})
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${stockViewTab === "kritis" ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setStockViewTab("kritis")}
+                style={{ fontSize: 11, padding: "3px 8px" }}
+              >
+                ⚠️ Stok Kritis ({criticalStock.length})
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${stockViewTab === "habis" ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setStockViewTab("habis")}
+                style={{ fontSize: 11, padding: "3px 8px" }}
+              >
+                🚫 Stok Habis ({outOfStock.length})
+              </button>
             </div>
           </div>
+
+          {/* Card 1: Stok Kritis (>= 1 & < 5) */}
+          {(stockViewTab === "semua" || stockViewTab === "kritis") && (
+            <div className="card" style={{ marginTop: 14 }}>
+              <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span className="card-title" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                  <span>⚠️</span> Stok Kritis (≥ 1 & &lt; 5)
+                </span>
+                <span
+                  className="badge"
+                  style={{
+                    fontSize: 11,
+                    background: "#FEF3C7",
+                    color: "#92400E",
+                    border: "1px solid #FDE68A",
+                    fontWeight: 600,
+                  }}
+                >
+                  {criticalStock.length} Material Perlu Restock
+                </span>
+              </div>
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Material</th>
+                      <th>Unit</th>
+                      <th style={{ textAlign: "right" }}>Stok WH</th>
+                      <th style={{ textAlign: "right" }}>Sisa LO</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {criticalStock.map((item) => (
+                      <tr key={item.materialCode || item.materialName}>
+                        <td>
+                          <span
+                            style={{ cursor: "pointer", color: "var(--blue)", textDecoration: "underline", fontWeight: 500 }}
+                            onClick={() => onMaterialClick && onMaterialClick(item.materialName || "")}
+                          >
+                            {item.materialName}
+                          </span>
+                        </td>
+                        <td>{item.unit}</td>
+                        <td className="stock-warn" style={{ textAlign: "right", fontWeight: 700, color: "var(--orange)" }}>
+                          {formatNumber(item.stockWhCalc)}
+                        </td>
+                        <td style={{ textAlign: "right", color: "var(--orange)", fontWeight: 500 }}>
+                          {formatNumber(item.leftoversStockCalc)}
+                        </td>
+                        <td>
+                          <span
+                            className="badge"
+                            style={{
+                              background: "#FEF3C7",
+                              color: "#92400E",
+                              border: "1px solid #FDE68A",
+                              fontSize: 10,
+                              fontWeight: 600,
+                            }}
+                          >
+                            Kritis ({item.stockWhCalc})
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {criticalStock.length === 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ textAlign: "center", padding: 20, color: "var(--text3)" }}>
+                          Aman, tidak ada material dengan stok kritis (1 - 4).
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Card 2: Stok Habis (= 0) */}
+          {(stockViewTab === "semua" || stockViewTab === "habis") && (
+            <div className="card" style={{ marginTop: 14 }}>
+              <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span className="card-title" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                  <span>🚫</span> Stok Habis (= 0)
+                </span>
+                <span
+                  className="badge"
+                  style={{
+                    fontSize: 11,
+                    background: "#FCEBEB",
+                    color: "#791F1F",
+                    border: "1px solid #FCA5A5",
+                    fontWeight: 600,
+                  }}
+                >
+                  {outOfStock.length} Material Habis
+                </span>
+              </div>
+              <div className="table-scroll" style={{ maxHeight: stockViewTab === "semua" ? 280 : 420 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Material</th>
+                      <th>Unit</th>
+                      <th style={{ textAlign: "right" }}>Stok WH</th>
+                      <th style={{ textAlign: "right" }}>Sisa LO</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {outOfStock.map((item) => (
+                      <tr key={item.materialCode || item.materialName}>
+                        <td>
+                          <span
+                            style={{ cursor: "pointer", color: "var(--blue)", textDecoration: "underline", fontWeight: 500 }}
+                            onClick={() => onMaterialClick && onMaterialClick(item.materialName || "")}
+                          >
+                            {item.materialName}
+                          </span>
+                        </td>
+                        <td>{item.unit}</td>
+                        <td className="stock-low" style={{ textAlign: "right", fontWeight: 700, color: "var(--red)" }}>
+                          {formatNumber(item.stockWhCalc)}
+                        </td>
+                        <td style={{ textAlign: "right", color: "var(--orange)", fontWeight: 500 }}>
+                          {formatNumber(item.leftoversStockCalc)}
+                        </td>
+                        <td>
+                          {item.stockWhCalc < 0 ? (
+                            <span
+                              className="badge"
+                              style={{
+                                background: "#FCEBEB",
+                                color: "#791F1F",
+                                border: "1px solid #FCA5A5",
+                                fontSize: 10,
+                                fontWeight: 600,
+                              }}
+                            >
+                              Minus!
+                            </span>
+                          ) : (
+                            <span
+                              className="badge"
+                              style={{
+                                background: "#FCEBEB",
+                                color: "#791F1F",
+                                border: "1px solid #FCA5A5",
+                                fontSize: 10,
+                                fontWeight: 600,
+                              }}
+                            >
+                              Habis
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {outOfStock.length === 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ textAlign: "center", padding: 20, color: "var(--text3)" }}>
+                          Semua material memiliki stok tersedia.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Column */}

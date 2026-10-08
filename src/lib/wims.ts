@@ -12,6 +12,8 @@ import type {
   User,
   WarehouseOption,
   WarehouseTransferLine,
+  SiteMonthlyAggregate,
+  SiteMonthlyMaterialBreakdown,
 } from "../types";
 
 export const POSITIVE_TYPES = new Set(["INBOUND", "BORROW IN", "TRANSFER IN"]);
@@ -536,5 +538,275 @@ export function createAuditTrail(options: {
     newValues: options.newValues ?? null,
     performedBy: options.performedBy ?? null,
     performedAt: new Date().toISOString(),
+  };
+}
+
+export function getMonthKey(dateStr?: string | null): string {
+  if (!dateStr) return "";
+  const normalized = normalizeText(dateStr);
+  if (!normalized) return "";
+  if (/^\d{4}-\d{2}/.test(normalized)) return normalized.slice(0, 7);
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+const INDO_MONTH_NAMES = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+];
+
+const INDO_MONTH_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+  "Jul", "Ags", "Sep", "Okt", "Nov", "Des"
+];
+
+export function formatMonthIndonesian(monthKey: string): string {
+  if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return monthKey || "-";
+  const [yearStr, monthStr] = monthKey.split("-");
+  const monthIdx = parseInt(monthStr, 10) - 1;
+  const monthName = INDO_MONTH_NAMES[monthIdx] || monthStr;
+  return `${monthName} ${yearStr}`;
+}
+
+export function formatMonthShort(monthKey: string): string {
+  if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return monthKey || "-";
+  const [yearStr, monthStr] = monthKey.split("-");
+  const monthIdx = parseInt(monthStr, 10) - 1;
+  const monthName = INDO_MONTH_SHORT[monthIdx] || monthStr;
+  return `${monthName} '${yearStr.slice(2)}`;
+}
+
+export interface SiteMonthlyOptions {
+  includeTransfers?: boolean;
+  warehouseFilter?: string;
+  yearFilter?: string;
+  monthFilter?: string;
+  searchQuery?: string;
+  activityFilter?: "ALL" | "BOTH" | "INBOUND_ONLY" | "OUTBOUND_ONLY";
+}
+
+export function aggregateSiteMonthly(
+  records: TransactionRecord[],
+  options: SiteMonthlyOptions = {}
+): {
+  items: SiteMonthlyAggregate[];
+  allMonths: string[];
+  allYears: number[];
+  allWarehouses: string[];
+  totals: {
+    uniqueSites: number;
+    inboundQty: number;
+    outboundQty: number;
+    netQty: number;
+    totalTxCount: number;
+  };
+} {
+  const allMonthsSet = new Set<string>();
+  const allYearsSet = new Set<number>();
+  const allWarehousesSet = new Set<string>();
+
+  const map = new Map<string, {
+    siteId: string;
+    siteName: string;
+    monthKey: string;
+    monthLabel: string;
+    year: number;
+    month: number;
+    warehouses: Set<string>;
+    inboundQty: number;
+    outboundQty: number;
+    inboundTxCount: number;
+    outboundTxCount: number;
+    materialsMap: Map<string, SiteMonthlyMaterialBreakdown>;
+    transactions: TransactionRecord[];
+  }>();
+
+  for (const row of records) {
+    const rawSiteName = normalizeText(row.siteName);
+    const rawSiteId = normalizeText(row.siteId);
+    if (!rawSiteName && !rawSiteId) continue;
+    if (rawSiteName === "-" && rawSiteId === "-") continue;
+
+    const siteName = rawSiteName || rawSiteId;
+    const siteId = rawSiteId && rawSiteId !== "-" ? rawSiteId : "-";
+
+    const monthKey = getMonthKey(row.date);
+    if (!monthKey) continue;
+
+    const year = parseInt(monthKey.slice(0, 4), 10);
+    const month = parseInt(monthKey.slice(5, 7), 10);
+
+    const wh = normalizeText(row.whGci);
+    if (wh) allWarehousesSet.add(wh);
+    allMonthsSet.add(monthKey);
+    allYearsSet.add(year);
+
+    const type = normalizeType(row.transactionType);
+    const includeTransfers = Boolean(options.includeTransfers);
+
+    const isInbound = type === "INBOUND" || (includeTransfers && (type === "BORROW IN" || type === "TRANSFER IN"));
+    const isOutbound = type === "OUTBOUND" || (includeTransfers && (type === "BORROW OUT" || type === "TRANSFER OUT"));
+
+    if (!isInbound && !isOutbound) continue;
+
+    // Filters before aggregation to maintain consistent filtered views
+    if (options.warehouseFilter && options.warehouseFilter !== "ALL" && wh !== options.warehouseFilter) {
+      continue;
+    }
+    if (options.yearFilter && options.yearFilter !== "ALL" && String(year) !== options.yearFilter) {
+      continue;
+    }
+    if (options.monthFilter && options.monthFilter !== "ALL" && monthKey !== options.monthFilter) {
+      continue;
+    }
+
+    const key = `${siteName}___${monthKey}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        siteId,
+        siteName,
+        monthKey,
+        monthLabel: formatMonthIndonesian(monthKey),
+        year,
+        month,
+        warehouses: new Set<string>(),
+        inboundQty: 0,
+        outboundQty: 0,
+        inboundTxCount: 0,
+        outboundTxCount: 0,
+        materialsMap: new Map<string, SiteMonthlyMaterialBreakdown>(),
+        transactions: [],
+      });
+    }
+
+    const group = map.get(key)!;
+    if (siteId !== "-" && group.siteId === "-") {
+      group.siteId = siteId;
+    }
+    if (wh) group.warehouses.add(wh);
+    group.transactions.push(row);
+
+    const qty = Number(row.qty) || 0;
+    const materialName = normalizeText(row.materialName) || "Material Tanpa Nama";
+    const materialCode = normalizeText(row.materialCode) || "-";
+    const unit = normalizeText(row.unit) || "Pcs";
+    const matKey = `${materialName}___${unit}`;
+
+    if (!group.materialsMap.has(matKey)) {
+      group.materialsMap.set(matKey, {
+        materialName,
+        materialCode,
+        unit,
+        inboundQty: 0,
+        outboundQty: 0,
+        netQty: 0,
+        inboundTxCount: 0,
+        outboundTxCount: 0,
+        totalTxCount: 0,
+      });
+    }
+
+    const matItem = group.materialsMap.get(matKey)!;
+    if (materialCode !== "-" && matItem.materialCode === "-") {
+      matItem.materialCode = materialCode;
+    }
+
+    if (isInbound) {
+      group.inboundQty += qty;
+      group.inboundTxCount += 1;
+      matItem.inboundQty += qty;
+      matItem.inboundTxCount += 1;
+    }
+    if (isOutbound) {
+      group.outboundQty += qty;
+      group.outboundTxCount += 1;
+      matItem.outboundQty += qty;
+      matItem.outboundTxCount += 1;
+    }
+
+    matItem.netQty = matItem.outboundQty - matItem.inboundQty;
+    matItem.totalTxCount = matItem.inboundTxCount + matItem.outboundTxCount;
+  }
+
+  // Convert to array and calculate netQty and totals
+  let items: SiteMonthlyAggregate[] = Array.from(map.values()).map((entry) => {
+    const materials = Array.from(entry.materialsMap.values()).sort(
+      (a, b) => (b.outboundQty + b.inboundQty) - (a.outboundQty + a.inboundQty)
+    );
+    return {
+      id: `${entry.siteName}___${entry.monthKey}`,
+      siteId: entry.siteId,
+      siteName: entry.siteName,
+      monthKey: entry.monthKey,
+      monthLabel: entry.monthLabel,
+      year: entry.year,
+      month: entry.month,
+      warehouses: Array.from(entry.warehouses),
+      inboundQty: entry.inboundQty,
+      outboundQty: entry.outboundQty,
+      netQty: entry.outboundQty - entry.inboundQty,
+      inboundTxCount: entry.inboundTxCount,
+      outboundTxCount: entry.outboundTxCount,
+      totalTxCount: entry.inboundTxCount + entry.outboundTxCount,
+      materials,
+      transactions: entry.transactions,
+    };
+  });
+
+  // Apply activity filter
+  if (options.activityFilter && options.activityFilter !== "ALL") {
+    if (options.activityFilter === "BOTH") {
+      items = items.filter((item) => item.inboundQty > 0 && item.outboundQty > 0);
+    } else if (options.activityFilter === "INBOUND_ONLY") {
+      items = items.filter((item) => item.inboundQty > 0 && item.outboundQty === 0);
+    } else if (options.activityFilter === "OUTBOUND_ONLY") {
+      items = items.filter((item) => item.outboundQty > 0 && item.inboundQty === 0);
+    }
+  }
+
+  // Apply search query
+  if (options.searchQuery) {
+    const q = normalizeText(options.searchQuery).toLowerCase();
+    items = items.filter((item) => {
+      if (item.siteName.toLowerCase().includes(q)) return true;
+      if (item.siteId.toLowerCase().includes(q)) return true;
+      if (item.monthLabel.toLowerCase().includes(q)) return true;
+      if (item.monthKey.toLowerCase().includes(q)) return true;
+      return item.materials.some(
+        (m) =>
+          m.materialName.toLowerCase().includes(q) ||
+          m.materialCode.toLowerCase().includes(q)
+      );
+    });
+  }
+
+  // Sort default chronologically descending by monthKey, then alphabetically by siteName
+  items.sort((a, b) => {
+    const mCompare = b.monthKey.localeCompare(a.monthKey);
+    if (mCompare !== 0) return mCompare;
+    return a.siteName.localeCompare(b.siteName);
+  });
+
+  const totals = {
+    uniqueSites: new Set(items.map((x) => x.siteName)).size,
+    inboundQty: items.reduce((sum, x) => sum + x.inboundQty, 0),
+    outboundQty: items.reduce((sum, x) => sum + x.outboundQty, 0),
+    netQty: items.reduce((sum, x) => sum + x.netQty, 0),
+    totalTxCount: items.reduce((sum, x) => sum + x.totalTxCount, 0),
+  };
+
+  const allMonths = Array.from(allMonthsSet).sort((a, b) => b.localeCompare(a));
+  const allYears = Array.from(allYearsSet).sort((a, b) => b - a);
+  const allWarehouses = Array.from(allWarehousesSet).sort((a, b) => a.localeCompare(b));
+
+  return {
+    items,
+    allMonths,
+    allYears,
+    allWarehouses,
+    totals,
   };
 }

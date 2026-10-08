@@ -4,7 +4,7 @@ import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from "recharts";
 import type { InventoryRow, MaterialItem, SiteItem, TransactionRecord } from "../types";
 import { buildTransactionExport, sendToWebhook } from "../lib/integration";
-import { safeReplace } from "../lib/wims";
+import { safeReplace, aggregateSiteMonthly } from "../lib/wims";
 
 interface ReportExportProps {
   logRows: TransactionRecord[];
@@ -111,6 +111,24 @@ export function ReportExport({ logRows, inventory, sites, materials, onImport }:
     exportCSV("WIMS_Material.csv", headers, rows);
   };
 
+  const handleExportSiteSummary = () => {
+    const agg = aggregateSiteMonthly(logRows);
+    const headers = ["Site ID", "Site Name", "Periode Bulan", "Gudang", "Total Inbound Qty", "Total Outbound Qty", "Net Qty (Out - In)", "Tx Inbound", "Tx Outbound", "Total Tx"];
+    const rows = agg.items.map((r) => [
+      `"${r.siteId}"`,
+      `"${r.siteName}"`,
+      `"${r.monthKey}"`,
+      `"${r.warehouses.join(", ") || "-"}"`,
+      `"${r.inboundQty}"`,
+      `"${r.outboundQty}"`,
+      `"${r.netQty}"`,
+      `"${r.inboundTxCount}"`,
+      `"${r.outboundTxCount}"`,
+      `"${r.totalTxCount}"`,
+    ]);
+    exportCSV("WIMS_Summary_Site_Bulanan.csv", headers, rows);
+  };
+
   const handleBackupJson = () => {
     const data = { logRows, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -206,6 +224,15 @@ export function ReportExport({ logRows, inventory, sites, materials, onImport }:
     ]);
     const wsDO = XLSX.utils.aoa_to_sheet([doHeaders, ...doRows_data]);
     XLSX.utils.book_append_sheet(wb, wsDO, "Delivery Orders");
+
+    const siteAgg = aggregateSiteMonthly(logRows);
+    const siteSumHeaders = ["No", "Site ID", "Nama Site", "Periode Bulan", "Gudang", "Total Inbound Qty", "Total Outbound Qty", "Net Qty", "Tx Inbound", "Tx Outbound", "Total Tx"];
+    const siteSumRows = siteAgg.items.map((r, idx) => [
+      idx + 1, r.siteId, r.siteName, r.monthKey, r.warehouses.join(", ") || "-",
+      r.inboundQty, r.outboundQty, r.netQty, r.inboundTxCount, r.outboundTxCount, r.totalTxCount
+    ]);
+    const wsSiteSum = XLSX.utils.aoa_to_sheet([siteSumHeaders, ...siteSumRows]);
+    XLSX.utils.book_append_sheet(wb, wsSiteSum, "Summary Site Bulanan");
 
     const dateStr = new Date().toISOString().split("T")[0];
     XLSX.writeFile(wb, `WIMS_Export_${dateStr}.xlsx`);
@@ -341,6 +368,9 @@ export function ReportExport({ logRows, inventory, sites, materials, onImport }:
             </button>
             <button className="btn" onClick={handleExportMat} style={{ justifyContent: "flex-start" }}>
               <FileDown size={16} style={{ marginRight: 8, color: "var(--purple)" }} /> Export Master Material (CSV)
+            </button>
+            <button className="btn" onClick={handleExportSiteSummary} style={{ justifyContent: "flex-start" }}>
+              <FileDown size={16} style={{ marginRight: 8, color: "var(--blue)" }} /> Export Summary Site Bulanan (CSV)
             </button>
             
             <div className="divider" style={{ borderBottom: "1px solid var(--border)", margin: "8px 0" }}></div>

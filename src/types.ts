@@ -221,7 +221,38 @@ export interface ActionEvent {
   status: "SUCCESS" | "WARNING" | "INFO";
 }
 
-export type ViewKey = "dashboard" | "inbound" | "outbound" | "transfer_borrow" | "warehouse_transfers" | "inventory" | "logfile" | "sites" | "nota" | "material" | "report" | "leftovers" | "material_history" | "delivery_orders" | "drum_history" | "drum_summary" | "warehouse_admin";
+export type ViewKey = "dashboard" | "inbound" | "outbound" | "transfer_borrow" | "warehouse_transfers" | "inventory" | "logfile" | "sites" | "site_summary" | "nota" | "material" | "report" | "leftovers" | "material_history" | "delivery_orders" | "drum_history" | "drum_summary" | "warehouse_admin";
+
+export interface SiteMonthlyMaterialBreakdown {
+  materialName: string;
+  materialCode: string;
+  unit: string;
+  inboundQty: number;
+  outboundQty: number;
+  netQty: number;
+  inboundTxCount: number;
+  outboundTxCount: number;
+  totalTxCount: number;
+}
+
+export interface SiteMonthlyAggregate {
+  id: string;
+  siteId: string;
+  siteName: string;
+  monthKey: string;
+  monthLabel: string;
+  year: number;
+  month: number;
+  warehouses: string[];
+  inboundQty: number;
+  outboundQty: number;
+  netQty: number;
+  inboundTxCount: number;
+  outboundTxCount: number;
+  totalTxCount: number;
+  materials: SiteMonthlyMaterialBreakdown[];
+  transactions: TransactionRecord[];
+}
 
 export type UserRole = "Admin" | "Manager" | "Staff Gudang";
 

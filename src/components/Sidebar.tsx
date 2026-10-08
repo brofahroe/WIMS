@@ -8,7 +8,8 @@ import {
   PackageOpen,
   ReceiptText,
   Repeat,
-  Truck
+  Truck,
+  Layers
 } from "lucide-react";
 import type { ViewKey, UserRole } from "../types";
 
@@ -37,6 +38,7 @@ export function Sidebar({ activeView, onViewChange, isMinimized = false, role = 
     { key: "warehouse_admin", label: "Gudang & Opname", icon: PackageOpen },
     { key: "leftovers", label: "Leftovers & LO", icon: ReceiptText },
     { key: "drum_summary", label: "Summary Haspel", icon: Database },
+    { key: "site_summary", label: "Summary Site (Bulanan)", icon: Layers },
   ];
 
   let navItemsRef: Array<{ key: ViewKey; label: string; icon: React.ComponentType<{ size?: number }> }> = [

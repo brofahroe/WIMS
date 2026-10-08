@@ -16,6 +16,10 @@ import {
   getInTransitQty,
   getAvailableReels,
   calculateInventory,
+  getMonthKey,
+  formatMonthIndonesian,
+  formatMonthShort,
+  aggregateSiteMonthly,
 } from "../lib/wims";
 import type { MaterialItem, OpeningBalanceRecord, TransactionRecord, WarehouseTransferLine } from "../types";
 
@@ -312,3 +316,209 @@ describe("in-transit inventory", () => {
     expect(inventory.stockWhCalc).toBe(0);
   });
 });
+
+describe("Monthly Site Summary Helpers", () => {
+  it("extracts month key correctly", () => {
+    expect(getMonthKey("2024-10-23T00:00:00.000Z")).toBe("2024-10");
+    expect(getMonthKey("2026-05-12")).toBe("2026-05");
+    expect(getMonthKey("")).toBe("");
+    expect(getMonthKey(null)).toBe("");
+  });
+
+  it("formats month names in Indonesian correctly", () => {
+    expect(formatMonthIndonesian("2024-10")).toBe("Oktober 2024");
+    expect(formatMonthIndonesian("2025-01")).toBe("Januari 2025");
+    expect(formatMonthShort("2024-10")).toBe("Okt '24");
+    expect(formatMonthIndonesian("invalid")).toBe("invalid");
+  });
+
+  it("aggregates inbound and outbound per site name and per month", () => {
+    const mockRows: TransactionRecord[] = [
+      {
+        id: "1",
+        source: "logfile",
+        rowId: "001",
+        lineId: 1,
+        taggingType: "LOGFILE",
+        transactionType: "INBOUND",
+        notaNo: "INB-01",
+        whGci: "EJ-Malang-01",
+        picWarehouse: "PIC",
+        date: "2024-10-15",
+        time: "10:00",
+        sourceDestination: "Supplier",
+        typeMaterial: "Fiber",
+        materialName: "Kabel FO 24C",
+        materialCode: "CBL-24C",
+        unit: "Meter",
+        qty: 1000,
+        siteId: "SITE-001",
+        siteName: "Site Singosari",
+        doNumber: null,
+        dnNumber: null,
+        condition: "Good",
+        picDelivery: null,
+        vendorSupplier: null,
+        idCard: null,
+        carPlate: null,
+        remarks: null,
+      },
+      {
+        id: "2",
+        source: "logfile",
+        rowId: "002",
+        lineId: 2,
+        taggingType: "LOGFILE",
+        transactionType: "OUTBOUND",
+        notaNo: "OUB-01",
+        whGci: "EJ-Malang-01",
+        picWarehouse: "PIC",
+        date: "2024-10-20",
+        time: "11:00",
+        sourceDestination: "Site",
+        typeMaterial: "Fiber",
+        materialName: "Kabel FO 24C",
+        materialCode: "CBL-24C",
+        unit: "Meter",
+        qty: 1500,
+        siteId: "SITE-001",
+        siteName: "Site Singosari",
+        doNumber: null,
+        dnNumber: null,
+        condition: "Good",
+        picDelivery: null,
+        vendorSupplier: null,
+        idCard: null,
+        carPlate: null,
+        remarks: null,
+      },
+      {
+        id: "3",
+        source: "logfile",
+        rowId: "003",
+        lineId: 3,
+        taggingType: "LOGFILE",
+        transactionType: "OUTBOUND",
+        notaNo: "OUB-02",
+        whGci: "EJ-Malang-01",
+        picWarehouse: "PIC",
+        date: "2024-11-05",
+        time: "09:00",
+        sourceDestination: "Site",
+        typeMaterial: "Fiber",
+        materialName: "Kabel FO 24C",
+        materialCode: "CBL-24C",
+        unit: "Meter",
+        qty: 500,
+        siteId: "SITE-001",
+        siteName: "Site Singosari",
+        doNumber: null,
+        dnNumber: null,
+        condition: "Good",
+        picDelivery: null,
+        vendorSupplier: null,
+        idCard: null,
+        carPlate: null,
+        remarks: null,
+      },
+      {
+        id: "4",
+        source: "logfile",
+        rowId: "004",
+        lineId: 4,
+        taggingType: "LOGFILE",
+        transactionType: "OUTBOUND",
+        notaNo: "OUB-03",
+        whGci: "EJ-Kediri-01",
+        picWarehouse: "PIC",
+        date: "2024-10-18",
+        time: "14:00",
+        sourceDestination: "Site",
+        typeMaterial: "Aksesoris",
+        materialName: "ODP 8 Port",
+        materialCode: "ODP-08",
+        unit: "Pcs",
+        qty: 10,
+        siteId: "SITE-002",
+        siteName: "Site Batu",
+        doNumber: null,
+        dnNumber: null,
+        condition: "Good",
+        picDelivery: null,
+        vendorSupplier: null,
+        idCard: null,
+        carPlate: null,
+        remarks: null,
+      },
+      {
+        // Row without site should be skipped
+        id: "5",
+        source: "logfile",
+        rowId: "005",
+        lineId: 5,
+        taggingType: "LOGFILE",
+        transactionType: "OUTBOUND",
+        notaNo: "OUB-04",
+        whGci: "EJ-Malang-01",
+        picWarehouse: "PIC",
+        date: "2024-10-25",
+        time: "15:00",
+        sourceDestination: "General",
+        typeMaterial: "General",
+        materialName: "Tools",
+        materialCode: "TLS",
+        unit: "Pcs",
+        qty: 2,
+        siteId: null,
+        siteName: null,
+        doNumber: null,
+        dnNumber: null,
+        condition: "Good",
+        picDelivery: null,
+        vendorSupplier: null,
+        idCard: null,
+        carPlate: null,
+        remarks: null,
+      },
+    ];
+
+    const result = aggregateSiteMonthly(mockRows);
+
+    expect(result.allMonths).toEqual(["2024-11", "2024-10"]);
+    expect(result.allYears).toEqual([2024]);
+    expect(result.allWarehouses).toEqual(["EJ-Kediri-01", "EJ-Malang-01"]);
+    expect(result.totals.uniqueSites).toBe(2);
+    expect(result.totals.inboundQty).toBe(1000);
+    expect(result.totals.outboundQty).toBe(2010);
+    expect(result.totals.netQty).toBe(1010);
+
+    // Filter by site and month
+    const singosariOct = result.items.find(
+      (x) => x.siteName === "Site Singosari" && x.monthKey === "2024-10"
+    );
+    expect(singosariOct).toBeDefined();
+    expect(singosariOct?.inboundQty).toBe(1000);
+    expect(singosariOct?.outboundQty).toBe(1500);
+    expect(singosariOct?.netQty).toBe(500);
+    expect(singosariOct?.inboundTxCount).toBe(1);
+    expect(singosariOct?.outboundTxCount).toBe(1);
+    expect(singosariOct?.totalTxCount).toBe(2);
+    expect(singosariOct?.materials).toHaveLength(1);
+    expect(singosariOct?.materials[0].materialName).toBe("Kabel FO 24C");
+
+    // Filter by year
+    const filtered2024 = aggregateSiteMonthly(mockRows, { yearFilter: "2024" });
+    expect(filtered2024.items.length).toBe(3);
+
+    // Filter by warehouse
+    const kediriOnly = aggregateSiteMonthly(mockRows, { warehouseFilter: "EJ-Kediri-01" });
+    expect(kediriOnly.items.length).toBe(1);
+    expect(kediriOnly.items[0].siteName).toBe("Site Batu");
+
+    // Filter activity: both inbound and outbound
+    const bothActivity = aggregateSiteMonthly(mockRows, { activityFilter: "BOTH" });
+    expect(bothActivity.items.length).toBe(1);
+    expect(bothActivity.items[0].siteName).toBe("Site Singosari");
+  });
+});
+

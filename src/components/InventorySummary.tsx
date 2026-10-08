@@ -27,7 +27,8 @@ export function InventorySummary({
     return inventory
       .filter((row) => {
         if (typeFilter === "stok0") return row.stockWhCalc <= 0;
-        if (typeFilter && typeFilter !== "stok0") return row.typeMaterial === typeFilter;
+        if (typeFilter === "stok_kritis") return row.stockWhCalc >= 1 && row.stockWhCalc < 5;
+        if (typeFilter) return row.typeMaterial === typeFilter;
         return true;
       })
       .filter((row) => {
@@ -100,8 +101,11 @@ export function InventorySummary({
         <button className={`chip ${typeFilter === "Accessories" ? "active" : ""}`} onClick={() => setTypeFilter("Accessories")}>
           Accessories
         </button>
-        <button className={`chip ${typeFilter === "stok0" ? "active" : ""}`} onClick={() => setTypeFilter("stok0")}>
-          ⚠ Stok ≤ 0
+        <button className={`chip ${typeFilter === "stok_kritis" ? "active" : ""}`} onClick={() => setTypeFilter("stok_kritis")} style={{ color: typeFilter === "stok_kritis" ? undefined : "var(--orange)" }}>
+          ⚠️ Stok Kritis (1 - 4) ({inventory.filter(r => r.stockWhCalc >= 1 && r.stockWhCalc < 5).length})
+        </button>
+        <button className={`chip ${typeFilter === "stok0" ? "active" : ""}`} onClick={() => setTypeFilter("stok0")} style={{ color: typeFilter === "stok0" ? undefined : "var(--red)" }}>
+          🚫 Stok Habis (= 0) ({inventory.filter(r => r.stockWhCalc <= 0).length})
         </button>
       </div>
 
