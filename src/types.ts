@@ -127,6 +127,11 @@ export interface TransactionRecord {
   approvalStatus?: "PENDING" | "APPROVED" | "REJECTED";
   approvedBy?: string | null;
   approvedAt?: string | null;
+  cluster?: string | null;
+  driverPhone?: string | null;
+  sourceWarehouseGci?: string | null;
+  destinationWarehouseGci?: string | null;
+  warehouseTransferId?: string | null;
 }
 
 export interface OpeningBalanceRecord {
@@ -210,6 +215,8 @@ export interface TransactionFormState {
   haspelSize?: string;
   proofLink?: string;
   requiresApproval?: boolean;
+  cluster?: string;
+  driverPhone?: string;
 }
 
 export interface ActionEvent {
@@ -221,7 +228,64 @@ export interface ActionEvent {
   status: "SUCCESS" | "WARNING" | "INFO";
 }
 
-export type ViewKey = "dashboard" | "inbound" | "outbound" | "transfer_borrow" | "warehouse_transfers" | "inventory" | "logfile" | "sites" | "site_summary" | "nota" | "material" | "report" | "leftovers" | "material_history" | "delivery_orders" | "drum_history" | "drum_summary" | "warehouse_admin";
+export type ViewKey =
+  | "dashboard"
+  | "inbound"
+  | "outbound"
+  | "transfer_borrow"
+  | "warehouse_transfers"
+  | "inventory"
+  | "logfile"
+  | "sites"
+  | "site_summary"
+  | "nota"
+  | "material"
+  | "report"
+  | "export_template"
+  | "leftovers"
+  | "material_history"
+  | "delivery_orders"
+  | "drum_history"
+  | "drum_summary"
+  | "warehouse_admin";
+
+export const EXPORT_TEMPLATE_COLUMNS = [
+  "Tipe Transaksi",
+  "Tanggal",
+  "Gudang Asal",
+  "Gudang Tujuan",
+  "Cluster",
+  "Sumber Material",
+  "No Transaksi / Group ID",
+  "No DO",
+  "No DN",
+  "Nama Driver",
+  "No HP Driver",
+  "Kode Material",
+  "Nama Material",
+  "Qty",
+  "Kondisi",
+] as const;
+
+export type ExportTemplateColumn = (typeof EXPORT_TEMPLATE_COLUMNS)[number];
+
+export interface ExportTemplateRow {
+  transactionType: string;
+  date: string;
+  gudangAsal: string;
+  gudangTujuan: string;
+  cluster: string;
+  sumberMaterial: string;
+  noTransaksi: string;
+  noDo: string;
+  noDn: string;
+  namaDriver: string;
+  noHpDriver: string;
+  kodeMaterial: string;
+  namaMaterial: string;
+  qty: number;
+  kondisi: string;
+}
 
 export interface SiteMonthlyMaterialBreakdown {
   materialName: string;

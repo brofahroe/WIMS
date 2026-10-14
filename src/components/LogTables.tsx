@@ -7,6 +7,10 @@ import { SortableHeader } from "./SortableHeader";
 import { Modal } from "./ui/Modal";
 import { NotaDetailModal } from "./NotaDetailModal";
 import { ProofGallery } from "./ProofGallery";
+import {
+  exportTemplateRowsToExcel,
+  transformToExportTemplateRow,
+} from "../lib/exportTemplate";
 
 interface LogTablesProps {
   logRows: TransactionRecord[];
@@ -110,6 +114,11 @@ export function LogTables({ logRows, currentUserRole, onMaterialClick, onDrumCli
     document.body.removeChild(link);
   };
 
+  const handleExportTemplateExcel = () => {
+    const rows = filteredRows.map((r) => transformToExportTemplateRow(r));
+    exportTemplateRowsToExcel(rows);
+  };
+
   const types = ["INBOUND", "OUTBOUND", "BORROW IN", "BORROW OUT", "TRANSFER IN", "TRANSFER OUT"];
 
   return (
@@ -144,7 +153,10 @@ export function LogTables({ logRows, currentUserRole, onMaterialClick, onDrumCli
           <option value="ALL">Semua WH</option>
           {warehouses.map(w => <option key={w as string} value={w as string}>{w as string}</option>)}
         </select>
-        <button className="btn" onClick={handleExportCsv}>
+        <button className="btn btn-primary" onClick={handleExportTemplateExcel} title="Export data terfilter dengan template 15 kolom">
+          <Download size={16} style={{ marginRight: 6 }} /> Export Template (15 Kolom)
+        </button>
+        <button className="btn" onClick={handleExportCsv} title="Export CSV Standar">
           <Download size={16} style={{ marginRight: 6 }} /> Export CSV
         </button>
       </div>

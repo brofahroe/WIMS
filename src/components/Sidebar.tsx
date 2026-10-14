@@ -46,6 +46,7 @@ export function Sidebar({ activeView, onViewChange, isMinimized = false, role = 
     { key: "sites", label: "Site Database", icon: MapPin },
     { key: "delivery_orders", label: "Delivery Orders", icon: Truck },
     { key: "report", label: "Laporan & Export", icon: ClipboardList },
+    { key: "export_template", label: "Export Template", icon: ArrowDownToLine },
   ];
 
   if (role === "Manager") {

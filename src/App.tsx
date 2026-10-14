@@ -18,6 +18,7 @@ import { DrumSummary } from "./components/DrumSummary";
 import { WarehouseTransferWorkspace } from "./components/WarehouseTransferWorkspace";
 import { WarehouseOperations } from "./components/WarehouseOperations";
 import { SiteSummaryMonthly } from "./components/SiteSummaryMonthly";
+import { ExportTemplateView } from "./components/ExportTemplateView";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import type { ActionEvent, OpeningBalanceRecord, SeedData, TransactionRecord, ViewKey, User, UserRole, WarehouseTransfer, WarehouseTransferLine } from "./types";
 import { LoginPage } from "./components/LoginPage";
@@ -48,6 +49,7 @@ const VIEW_TITLES: Record<ViewKey, string> = {
   sites: "Site Database",
   material: "Master Material",
   report: "Laporan & Export",
+  export_template: "Export Template Transaksi",
   nota: "Nota Print",
   material_history: "History Material",
   delivery_orders: "Delivery Orders",
@@ -60,16 +62,16 @@ const VIEW_TITLES: Record<ViewKey, string> = {
 const ROLE_ALLOWED_VIEWS: Record<UserRole, ViewKey[]> = {
   Admin: [
     "dashboard","inbound","outbound","transfer_borrow","inventory","logfile",
-    "leftovers","sites","material","report","nota","material_history",
+    "leftovers","sites","material","report","export_template","nota","material_history",
     "delivery_orders","drum_history","drum_summary","warehouse_admin","warehouse_transfers","site_summary",
   ],
   Manager: [
-    "dashboard","inventory","logfile","sites","material","report",
+    "dashboard","inventory","logfile","sites","material","report","export_template",
     "nota","material_history","delivery_orders","drum_history","drum_summary","warehouse_admin","warehouse_transfers","site_summary",
   ],
   "Staff Gudang": [
     "dashboard","inbound","outbound","transfer_borrow","inventory",
-    "leftovers","sites","report","nota","material_history",
+    "leftovers","sites","report","export_template","nota","material_history",
     "delivery_orders","drum_history","drum_summary","warehouse_admin","warehouse_transfers","site_summary",
   ],
 };
@@ -758,6 +760,16 @@ function App() {
                 sites={sites} 
                 materials={materials} 
                 onImport={(rows) => { setLogRows(rows); }} 
+                onNavigateToExportTemplate={() => handleViewChange("export_template")}
+              />
+            ) : null}
+            {activeView === "export_template" ? (
+              <ExportTemplateView
+                logRows={logRows}
+                materials={materials}
+                sites={sites}
+                warehouses={master.warehouses}
+                currentWarehouseFilter={warehouseFilter}
               />
             ) : null}
             {activeView === "nota" ? <NotaPanel logRows={logRows} /> : null}

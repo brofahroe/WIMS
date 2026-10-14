@@ -5,6 +5,11 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import type { InventoryRow, MaterialItem, SiteItem, TransactionRecord } from "../types";
 import { buildTransactionExport, sendToWebhook } from "../lib/integration";
 import { safeReplace, aggregateSiteMonthly } from "../lib/wims";
+import {
+  exportTemplateRowsToCsv,
+  exportTemplateRowsToExcel,
+  transformToExportTemplateRow,
+} from "../lib/exportTemplate";
 
 interface ReportExportProps {
   logRows: TransactionRecord[];
@@ -12,9 +17,17 @@ interface ReportExportProps {
   sites: SiteItem[];
   materials: MaterialItem[];
   onImport: (logRows: TransactionRecord[]) => void;
+  onNavigateToExportTemplate?: () => void;
 }
 
-export function ReportExport({ logRows, inventory, sites, materials, onImport }: ReportExportProps) {
+export function ReportExport({
+  logRows,
+  inventory,
+  sites,
+  materials,
+  onImport,
+  onNavigateToExportTemplate,
+}: ReportExportProps) {
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [webhookUrl, setWebhookUrl] = useState("");
@@ -127,6 +140,16 @@ export function ReportExport({ logRows, inventory, sites, materials, onImport }:
       `"${r.totalTxCount}"`,
     ]);
     exportCSV("WIMS_Summary_Site_Bulanan.csv", headers, rows);
+  };
+
+  const handleExportTemplateExcel = () => {
+    const rows = logRows.map((r) => transformToExportTemplateRow(r, materials, sites));
+    exportTemplateRowsToExcel(rows);
+  };
+
+  const handleExportTemplateCsv = () => {
+    const rows = logRows.map((r) => transformToExportTemplateRow(r, materials, sites));
+    exportTemplateRowsToCsv(rows);
   };
 
   const handleBackupJson = () => {
@@ -357,6 +380,61 @@ export function ReportExport({ logRows, inventory, sites, materials, onImport }:
         <div className="card">
           <div className="card-header"><span className="card-title">Export Data</span></div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "8px 0" }}>
+            {/* Box Highlight Template Export 15 Kolom */}
+            <div
+              style={{
+                padding: "12px",
+                background: "linear-gradient(135deg, rgba(14, 165, 233, 0.08) 0%, rgba(99, 102, 241, 0.06) 100%)",
+                borderRadius: "var(--radius)",
+                border: "1px solid rgba(14, 165, 233, 0.25)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--blue)" }}>
+                  Template Export Transaksi (15 Kolom)
+                </span>
+                <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "var(--blue)", color: "#fff", fontWeight: 600 }}>
+                  BARU
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text2)", lineHeight: 1.4 }}>
+                Format: <i>Tipe Transaksi - Tanggal - Gudang Asal - Gudang Tujuan - Cluster - Sumber Material - No Transaksi / Group ID - No DO - No DN - Nama Driver - No HP Driver - Kode Material - Nama Material - Qty - Kondisi</i>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  onClick={handleExportTemplateExcel}
+                  style={{ flex: 1, justifyContent: "center" }}
+                  title="Unduh template export dalam format Excel (.xlsx)"
+                >
+                  <Download size={14} style={{ marginRight: 4 }} /> Excel (.xlsx)
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={handleExportTemplateCsv}
+                  style={{ flex: 1, justifyContent: "center" }}
+                  title="Unduh template export dalam format CSV (.csv)"
+                >
+                  <FileDown size={14} style={{ marginRight: 4 }} /> CSV (.csv)
+                </button>
+              </div>
+              {onNavigateToExportTemplate && (
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={onNavigateToExportTemplate}
+                  style={{ width: "100%", justifyContent: "center", fontSize: 11, background: "transparent", border: "1px dashed var(--border)" }}
+                >
+                  Buka Filter &amp; Preview Template &rarr;
+                </button>
+              )}
+            </div>
+
             <button className="btn" onClick={handleExportLog} style={{ justifyContent: "flex-start" }}>
               <FileDown size={16} style={{ marginRight: 8, color: "var(--blue)" }} /> Export Logfile Transaksi (CSV)
             </button>
